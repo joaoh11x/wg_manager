@@ -38,3 +38,37 @@ def delete_interface(name):
         return jsonify({"message": f"Interface '{name}' deletada com sucesso"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@interfaces_bp.route("/interfaces", methods=["GET"])
+def list_interfaces():
+    """
+    Rota para listar todas as interfaces WireGuard.
+    """
+    service = WireGuardService()
+    try:
+        interfaces = service.list_interfaces()
+        return jsonify(interfaces), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@interfaces_bp.route("/interfaces/<string:name>", methods=["PUT"])
+def update_interface(name):
+    """
+    Rota para atualizar uma interface WireGuard.
+    """
+    data = request.json
+
+    # Valida os dados recebidos
+    if not data or "listen_port" not in data:
+        return jsonify({"error": "Porta é obrigatória"}), 400
+
+    listen_port = data["listen_port"]
+    new_name = data.get("name", name)
+
+    # Atualiza a interface usando o serviço
+    service = WireGuardService()
+    try:
+        service.update_interface(name, listen_port, new_name)
+        return jsonify({"message": f"Interface '{name}' atualizada com sucesso"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
