@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
 from app.services.wireguard_service import WireGuardService
+from flask_jwt_extended import jwt_required
 
 # Cria um Blueprint para as rotas de interfaces
 interfaces_bp = Blueprint("interfaces", __name__)
 
 @interfaces_bp.route("/interfaces", methods=["POST"])
+@jwt_required()
 def create_interface():
     """
     Rota para criar uma nova interface WireGuard.
