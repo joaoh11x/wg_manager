@@ -70,3 +70,32 @@ class MikroTikAPI:
                 raise Exception(f"Interface '{name}' não encontrada")
         except Exception as e:
             raise Exception(f"Erro ao atualizar interface: {e}")
+        
+    def create_ip_address(self, address, interface, comment=""):
+        """Adiciona um IP a uma interface (IP > Address)"""
+        try:
+            self.api.get_resource('/ip/address').add(
+                address=address,
+                interface=interface,
+                comment=comment
+            )
+            return True
+        except Exception as e:
+            if "already exists" in str(e):
+                raise Exception(f"IP {address} já existe na interface {interface}")
+            raise Exception(f"Falha ao adicionar IP: {e}")
+    
+    def list_ip_addresses(self):
+        """Lista todos os IPs configurados"""
+        try:
+            return self.api.get_resource('/ip/address').get()
+        except Exception as e:
+            raise Exception(f"Erro ao listar IPs: {e}")
+    
+    def delete_ip_address(self, ip_id):
+        """Remove um IP pelo ID"""
+        try:
+            self.api.get_resource('/ip/address').remove(id=ip_id)
+            return True
+        except Exception as e:
+            raise Exception(f"Erro ao remover IP: {e}")

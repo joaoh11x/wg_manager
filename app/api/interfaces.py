@@ -30,6 +30,7 @@ def create_interface():
 
 
 @interfaces_bp.route("/interfaces/<string:name>", methods=["DELETE"])
+@jwt_required()
 def delete_interface(name):
     """
     Rota para deletar uma interface WireGuard.
@@ -42,6 +43,7 @@ def delete_interface(name):
         return jsonify({"error": str(e)}), 500
     
 @interfaces_bp.route("/interfaces", methods=["GET"])
+@jwt_required()
 def list_interfaces():
     """
     Rota para listar todas as interfaces WireGuard.
@@ -54,6 +56,7 @@ def list_interfaces():
         return jsonify({"error": str(e)}), 500
     
 @interfaces_bp.route("/interfaces/<string:name>", methods=["PUT"])
+@jwt_required()
 def update_interface(name):
     """
     Rota para atualizar uma interface WireGuard.

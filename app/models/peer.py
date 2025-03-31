@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
-from app.models.base import Base  # Base comum para todos os modelos
+from app.models.base import Base 
 
 class Peer(Base):
     __tablename__ = "peers"
