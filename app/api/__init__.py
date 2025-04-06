@@ -8,13 +8,15 @@ def create_app():
         interfaces,
         traffic,
         auth,
-        ip_addresses
+        ip_addresses,
+        firewall
     )
 
     app.register_blueprint(peers.peers_bp)
     app.register_blueprint(interfaces.interfaces_bp)
     app.register_blueprint(traffic.traffic_bp)
     app.register_blueprint(auth.auth_bp)
-    app.register_blueprint(ip_addresses.ip_bp) 
+    app.register_blueprint(ip_addresses.ip_bp)
+    app.register_blueprint(firewall.firewall_bp)
 
     return app

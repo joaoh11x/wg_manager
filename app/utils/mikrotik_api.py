@@ -99,3 +99,39 @@ class MikroTikAPI:
             return True
         except Exception as e:
             raise Exception(f"Erro ao remover IP: {e}")
+        
+    def create_firewall_rule(self, chain, action, protocol=None, dst_port=None, src_address=None, comment=""):
+        """Cria uma regra de firewall"""
+        try:
+            params = {
+                'chain': chain,
+                'action': action,
+                'comment': comment
+            }
+            
+            if protocol:
+                params['protocol'] = protocol
+            if dst_port:
+                params['dst-port'] = str(dst_port)
+            if src_address:
+                params['src-address'] = src_address
+                
+            self.api.get_resource('/ip/firewall/filter').add(**params)
+            return True
+        except Exception as e:
+            raise Exception(f"Erro ao criar regra: {e}")
+    
+    def list_firewall_rules(self):
+        """Lista todas as regras de firewall"""
+        try:
+            return self.api.get_resource('/ip/firewall/filter').get()
+        except Exception as e:
+            raise Exception(f"Erro ao listar regras: {e}")
+    
+    def delete_firewall_rule(self, rule_id):
+        """Remove uma regra pelo ID"""
+        try:
+            self.api.get_resource('/ip/firewall/filter').remove(id=rule_id)
+            return True
+        except Exception as e:
+            raise Exception(f"Erro ao deletar regra: {e}")
