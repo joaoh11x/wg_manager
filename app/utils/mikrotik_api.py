@@ -135,3 +135,55 @@ class MikroTikAPI:
             return True
         except Exception as e:
             raise Exception(f"Erro ao deletar regra: {e}")
+        
+    def create_forward_rule(self, src_address, dst_address, action='accept', comment=""):
+        """Cria regra de forward entre redes"""
+        try:
+            self.api.get_resource('/ip/firewall/filter').add(
+                chain='forward',
+                src_address=src_address,
+                dst_address=dst_address,
+                action=action,
+                comment=comment
+            )
+            return True
+        except Exception as e:
+            raise Exception(f"Erro ao criar regra de forward: {e}")
+    
+    def get_forward_rules(self):
+        """Lista todas as regras de forward"""
+        try:
+            return self.api.get_resource('/ip/firewall/filter').get(chain='forward')
+        except Exception as e:
+            raise Exception(f"Erro ao listar regras de forward: {e}")
+        
+    def create_nat_rule(self, chain, src_address=None, action='masquerade', comment=""):
+        """Cria regra NAT"""
+        try:
+            params = {
+                'chain': chain,
+                'action': action,
+                'comment': comment
+            }
+            if src_address:
+                params['src-address'] = src_address
+                
+            self.api.get_resource('/ip/firewall/nat').add(**params)
+            return True
+        except Exception as e:
+            raise Exception(f"Erro ao criar regra NAT: {e}")
+    
+    def list_nat_rules(self):
+        """Lista todas as regras NAT"""
+        try:
+            return self.api.get_resource('/ip/firewall/nat').get()
+        except Exception as e:
+            raise Exception(f"Erro ao listar regras NAT: {e}")
+    
+    def delete_nat_rule(self, rule_id):
+        """Remove uma regra NAT pelo ID"""
+        try:
+            self.api.get_resource('/ip/firewall/nat').remove(id=rule_id)
+            return True
+        except Exception as e:
+            raise Exception(f"Erro ao remover regra NAT: {e}")
