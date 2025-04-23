@@ -167,19 +167,19 @@ class MikroTikAPI:
             }
             if src_address:
                 params['src-address'] = src_address
-                
+
             self.api.get_resource('/ip/firewall/nat').add(**params)
             return True
         except Exception as e:
             raise Exception(f"Erro ao criar regra NAT: {e}")
-    
+
     def list_nat_rules(self):
         """Lista todas as regras NAT"""
         try:
             return self.api.get_resource('/ip/firewall/nat').get()
         except Exception as e:
             raise Exception(f"Erro ao listar regras NAT: {e}")
-    
+
     def delete_nat_rule(self, rule_id):
         """Remove uma regra NAT pelo ID"""
         try:
@@ -187,3 +187,60 @@ class MikroTikAPI:
             return True
         except Exception as e:
             raise Exception(f"Erro ao remover regra NAT: {e}")
+        
+    def get_interface_ips(self, interface_name):
+        """Lista IPs de uma interface específica"""
+        return self.api.get_resource('/ip/address').get(interface=interface_name)
+
+    def list_wireguard_peers(self):
+        """Lista todos os peers WireGuard"""
+        return self.api.get_resource('/interface/wireguard/peers').get()
+
+    def create_wireguard_peer_safe(self, name, interface, public_key, allowed_address, endpoint, listen_port, client_address, client_dns=None, responder=True):
+        """Cria peer com validação extra e configurações adicionais"""
+        if not isinstance(public_key, str) or len(public_key) != 44 or not public_key.endswith('='):
+            raise ValueError("Chave pública deve ser uma string Base64 de 44 caracteres")
+
+        try:
+            peer_resource = self.api.get_resource('/interface/wireguard/peers')
+
+            # Configuração do peer com todos os parâmetros
+            peer_resource.add(
+                name=name,
+                interface=interface,
+                public_key=public_key,
+                allowed_address=allowed_address,
+                endpoint_address=endpoint,
+                endpoint_port=str(listen_port),
+                client_address=client_address,
+                client_dns=client_dns if client_dns else "",
+                persistent_keepalive="00:00:05",  # Keepalive de 5 segundos
+                client_endpoint=endpoint,  # Novo: Endpoint do cliente
+                client_keepalive="00:00:05",  # Novo: Keepalive do cliente
+                client_listen_port=str(listen_port),  # Mesma porta da interface
+                responder="yes" if responder else "no"
+            )
+
+            # Não é mais necessário atualizar separadamente o endpoint
+            # pois já configuramos tudo na criação
+
+        except Exception as e:
+            if "invalid public key" in str(e).lower():
+                raise ValueError("MikroTik rejeitou a chave. Formato incorreto.")
+            raise Exception(f"Erro na API: {str(e)}")
+
+    def delete_wireguard_peer(self, peer_name):
+        peers = self.api.get_resource('/interface/wireguard/peers')
+        peer = peers.get(name=peer_name)
+        if peer:
+            peers.remove(id=peer[0]['id'])    
+
+    def get_wireguard_interface_port(self, interface_name):
+        """Obtém a porta configurada na interface WireGuard"""
+        try:
+            interfaces = self.api.get_resource('/interface/wireguard').get(name=interface_name)
+            if not interfaces:
+                raise ValueError(f"Interface {interface_name} não encontrada")
+            return interfaces[0].get('listen-port', '13231')  # Porta padrão do WireGuard se não especificada
+        except Exception as e:
+            raise Exception(f"Erro ao obter porta da interface: {str(e)}")
