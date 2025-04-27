@@ -23,21 +23,32 @@ class WireGuardPeerService:
         """Gera chaves no formato que o MikroTik aceita"""
         private_key = x25519.X25519PrivateKey.generate()
         public_key = private_key.public_key()
-
+    
         private_key_bytes = private_key.private_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PrivateFormat.Raw,
             encryption_algorithm=serialization.NoEncryption()
         )
-
+    
         public_key_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw
         )
-
+    
         private_key_b64 = base64.b64encode(private_key_bytes).decode('ascii')
         public_key_b64 = base64.b64encode(public_key_bytes).decode('ascii')
-
+    
+        # Verificação EXTRA para garantir chaves válidas
+        if (len(private_key_b64) != 44 or 
+            len(public_key_b64) != 44 or
+            not private_key_b64.endswith('=') or
+            not public_key_b64.endswith('=')):
+            raise ValueError("Formato de chave inválido gerado")
+        
+        # Verifica se a chave não é uma sequência repetitiva
+        if private_key_b64 == 'A' * 44:
+            raise ValueError("Chave privada inválida gerada")
+    
         return {
             'private': private_key_b64,
             'public': public_key_b64
@@ -61,28 +72,32 @@ class WireGuardPeerService:
         try:
             # 1. Gerar chaves
             keys = self._generate_valid_keypair()
-    
+
             # 2. Obter rede e IP disponível
             network = self._get_interface_network(interface_name)
             peer_ip = self._get_next_available_ip(network)
-    
+
             # 3. Obter o IP do MikroTik e a porta da interface
             mikrotik_ip = os.getenv("MIKROTIK_HOST")
             listen_port = self.mikrotik_api.get_wireguard_interface_port(interface_name)
-    
-            # 4. Criar peer no MikroTik - ATUALIZADO para usar endpoint_address
+
+            # 4. Criar peer no MikroTik
             self.mikrotik_api.create_wireguard_peer_safe(
                 name=name,
                 interface=interface_name,
                 public_key=keys['public'],
+                private_key=keys['private'],
                 allowed_address=peer_ip,
-                endpoint=mikrotik_ip,  # Será convertido para endpoint_address na API
+                endpoint=mikrotik_ip,
                 listen_port=listen_port,
-                client_address=peer_ip.split('/')[0],  # Apenas o IP, sem a máscara
+                client_address=peer_ip.split('/')[0],
                 client_dns=client_dns,
                 responder=True
             )
-    
+
+            # 5. Atualizar o peer com a chave privada (etapa adicional)
+            self._update_peer_private_key(name, interface_name, keys['private'])
+
             return {
                 'success': True,
                 'peer_name': name,
@@ -90,17 +105,21 @@ class WireGuardPeerService:
                 'peer_ip': peer_ip,
                 'private_key': keys['private'],
                 'public_key': keys['public'],
-                'endpoint': f"{mikrotik_ip}:{listen_port}",
-                'client_config': {
-                    'endpoint': f"{mikrotik_ip}:{listen_port}",
-                    'keepalive': '25',  # Em segundos para o cliente WireGuard
-                    'listen_port': listen_port,
-                    'dns': client_dns
-                }
+                'endpoint': f"{mikrotik_ip}:{listen_port}"
             }
-    
+
         except Exception as e:
             return {
                 'success': False,
                 'error': str(e)
             }
+
+    def _update_peer_private_key(self, peer_name, interface_name, private_key):
+        """Atualiza a chave privada do peer após criação"""
+        peers = self.mikrotik_api.api.get_resource('/interface/wireguard/peers')
+        peer = peers.get(name=peer_name, interface=interface_name)
+
+        if not peer:
+            raise ValueError("Peer não encontrado para atualização")
+
+        peers.set(id=peer[0]['id'], private_key=private_key)

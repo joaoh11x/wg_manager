@@ -196,34 +196,38 @@ class MikroTikAPI:
         """Lista todos os peers WireGuard"""
         return self.api.get_resource('/interface/wireguard/peers').get()
 
-    def create_wireguard_peer_safe(self, name, interface, public_key, allowed_address, endpoint, listen_port, client_address, client_dns=None, responder=True):
+    def create_wireguard_peer_safe(self, name, interface, public_key, private_key, allowed_address, endpoint, listen_port, client_address, client_dns=None, responder=True):
         """Cria peer com validação extra e configurações adicionais"""
         if not isinstance(public_key, str) or len(public_key) != 44 or not public_key.endswith('='):
             raise ValueError("Chave pública deve ser uma string Base64 de 44 caracteres")
-
+    
         try:
             peer_resource = self.api.get_resource('/interface/wireguard/peers')
-
-            # Configuração do peer com todos os parâmetros
-            peer_resource.add(
-                name=name,
-                interface=interface,
-                public_key=public_key,
-                allowed_address=allowed_address,
-                endpoint_address=endpoint,
-                endpoint_port=str(listen_port),
-                client_address=client_address,
-                client_dns=client_dns if client_dns else "",
-                persistent_keepalive="00:00:05",  # Keepalive de 5 segundos
-                client_endpoint=endpoint,  # Novo: Endpoint do cliente
-                client_keepalive="00:00:05",  # Novo: Keepalive do cliente
-                client_listen_port=str(listen_port),  # Mesma porta da interface
-                responder="yes" if responder else "no"
-            )
-
-            # Não é mais necessário atualizar separadamente o endpoint
-            # pois já configuramos tudo na criação
-
+            
+            # Configuração completa do peer incluindo private-key
+            peer_params = {
+                'name': name,
+                'interface': interface,
+                'public-key': public_key,
+                'private-key': private_key,
+                'allowed-address': allowed_address,
+                'endpoint-address': endpoint,
+                'endpoint-port': str(listen_port),
+                'client-address': client_address,
+                'client-endpoint': endpoint,
+                'client-keepalive': '00:00:05',
+                'client-listen-port': str(listen_port),
+                'persistent-keepalive': '00:00:05',
+                'responder': 'yes' if responder else 'no'
+            }
+            
+            # Adiciona DNS apenas se fornecido
+            if client_dns:
+                peer_params['client-dns'] = client_dns
+                
+            # Cria o peer
+            peer_resource.add(**peer_params)
+    
         except Exception as e:
             if "invalid public key" in str(e).lower():
                 raise ValueError("MikroTik rejeitou a chave. Formato incorreto.")
