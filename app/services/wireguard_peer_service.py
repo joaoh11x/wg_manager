@@ -54,17 +54,28 @@ class WireGuardPeerService:
             'public': public_key_b64
         }
 
-    def _get_next_available_ip(self, network):
-        """Encontra o próximo IP disponível na rede"""
+    def _get_next_available_ip(self, network, interface_name):
+        # 1. Obter IP do servidor (da própria interface WireGuard)
+        interface_ips = self.mikrotik_api.get_interface_ips(interface_name)
+        if not interface_ips:
+            raise ValueError(f"Interface {interface_name} não possui IP configurado")
+
+        server_ip = ip_address(interface_ips[0]['address'].split('/')[0])
+
+        # 2. Obter IPs usados pelos peers
         used_ips = [
             ip_address(peer['allowed-address'].split('/')[0])
             for peer in self.mikrotik_api.list_wireguard_peers()
             if peer.get('allowed-address')
         ]
-        
+
+        # 3. Procurar próximo IP disponível
         for host in network.hosts():
-            if host not in used_ips and host != network.network_address:
+            if (host not in used_ips and 
+                host != network.network_address and
+                host != server_ip):
                 return f"{host}/{network.prefixlen}"
+
         raise ValueError("Não há IPs disponíveis na rede")
 
     def create_peer(self, name, interface_name, client_dns="8.8.8.8"):
@@ -75,7 +86,7 @@ class WireGuardPeerService:
 
             # 2. Obter rede e IP disponível
             network = self._get_interface_network(interface_name)
-            peer_ip = self._get_next_available_ip(network)
+            peer_ip = self._get_next_available_ip(network, interface_name)
 
             # 3. Obter o IP do MikroTik e a porta da interface
             mikrotik_ip = os.getenv("MIKROTIK_HOST")
