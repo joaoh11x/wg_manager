@@ -38,7 +38,7 @@ class WireGuardPeerService:
         private_key_b64 = base64.b64encode(private_key_bytes).decode('ascii')
         public_key_b64 = base64.b64encode(public_key_bytes).decode('ascii')
     
-        # Verificação EXTRA para garantir chaves válidas
+        # Verificação para validação das chaves
         if (len(private_key_b64) != 44 or 
             len(public_key_b64) != 44 or
             not private_key_b64.endswith('=') or
@@ -123,3 +123,68 @@ class WireGuardPeerService:
             raise ValueError("Peer não encontrado para atualização")
 
         peers.set(id=peer[0]['id'], private_key=private_key)
+        
+    def list_peers(self, interface_name=None):
+        """Lista todos os peers WireGuard ou filtra por interface"""
+        try:
+            # Obter todos os peers do MikroTik
+            raw_peers = self.mikrotik_api.list_wireguard_peers()
+
+            # Filtrar por interface se especificado
+            if interface_name:
+                raw_peers = [peer for peer in raw_peers if peer.get('interface') == interface_name]
+
+            # Formatar os dados de retorno
+            formatted_peers = []
+            for peer in raw_peers:
+                formatted_peer = {
+                    'name': peer.get('name', ''),
+                    'interface': peer.get('interface', ''),
+                    'public_key': peer.get('public-key', ''),
+                    'allowed_address': peer.get('allowed-address', ''),
+                    'endpoint': f"{peer.get('endpoint-address', '')}:{peer.get('endpoint-port', '')}" 
+                               if peer.get('endpoint-address') else '',
+                    'last_handshake': peer.get('last-handshake', ''),
+                    'transfer_rx': peer.get('transfer-rx', ''),
+                    'transfer_tx': peer.get('transfer-tx', ''),
+                    'persistent_keepalive': peer.get('persistent-keepalive', '')
+                }
+                formatted_peers.append(formatted_peer)
+
+            return {
+                'success': True,
+                'peers': formatted_peers,
+                'count': len(formatted_peers)
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'peers': [],
+                'count': 0
+            }
+    
+    def delete_peer(self, peer_name):
+        """Remove um peer WireGuard pelo nome"""
+        try:
+            # Verificar se o peer existe
+            peers = self.mikrotik_api.list_wireguard_peers()
+            peer_exists = any(peer.get('name') == peer_name for peer in peers)
+            
+            if not peer_exists:
+                raise ValueError(f"Peer {peer_name} não encontrado")
+                
+            # Remover o peer
+            self.mikrotik_api.delete_wireguard_peer(peer_name)
+            
+            return {
+                'success': True,
+                'message': f"Peer {peer_name} removido com sucesso"
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }

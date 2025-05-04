@@ -204,7 +204,6 @@ class MikroTikAPI:
         try:
             peer_resource = self.api.get_resource('/interface/wireguard/peers')
             
-            # Configuração completa do peer incluindo private-key
             peer_params = {
                 'name': name,
                 'interface': interface,
