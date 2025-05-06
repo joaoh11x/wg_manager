@@ -74,7 +74,7 @@ class WireGuardPeerService:
             if (host not in used_ips and 
                 host != network.network_address and
                 host != server_ip):
-                return f"{host}/{network.prefixlen}"
+                return f"{host}/32"
 
         raise ValueError("Não há IPs disponíveis na rede")
 
@@ -152,6 +152,7 @@ class WireGuardPeerService:
                     'name': peer.get('name', ''),
                     'interface': peer.get('interface', ''),
                     'public_key': peer.get('public-key', ''),
+                    'private-key': peer.get('private-key', ''),
                     'allowed_address': peer.get('allowed-address', ''),
                     'endpoint': f"{peer.get('endpoint-address', '')}:{peer.get('endpoint-port', '')}" 
                                if peer.get('endpoint-address') else '',
