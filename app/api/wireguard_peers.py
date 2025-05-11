@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.services.wireguard_peer_service import WireGuardPeerService
+import datetime
 
 peers_bp = Blueprint('wireguard_peers', __name__)
 
@@ -46,3 +47,42 @@ def delete_peer(peer_name):
         return jsonify({"message": f"Peer {peer_name} removido"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+@peers_bp.route('/wireguard/peers/stats', methods=['GET'])
+@jwt_required()
+def get_peers_stats():
+    interface = request.args.get('interface')
+    service = WireGuardPeerService()
+    try:
+        # Obter estatísticas atualizadas
+        raw_peers = service.mikrotik_api.list_wireguard_peers()
+        
+        # Filtrar por interface se especificado
+        if interface:
+            raw_peers = [peer for peer in raw_peers if peer.get('interface') == interface]
+
+        # Formatar apenas os dados necessários para atualização
+        stats = []
+        for peer in raw_peers:
+            stats.append({
+                'name': peer.get('name', ''),
+                'interface': peer.get('interface', ''),
+                'last_handshake': peer.get('last-handshake', ''),
+                'rx': peer.get('rx', ''),
+                'tx': peer.get('tx', ''),
+                'public_key': peer.get('public-key', '')[:10] + '...'  # Chave abreviada para identificação
+            })
+        
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'count': len(stats),
+            'timestamp': datetime.datetime.now().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'stats': [],
+            'count': 0
+        }), 500

@@ -247,3 +247,11 @@ class MikroTikAPI:
             return interfaces[0].get('listen-port', '13231')  # Porta padrão do WireGuard se não especificada
         except Exception as e:
             raise Exception(f"Erro ao obter porta da interface: {str(e)}")
+        
+    def get_wireguard_peers_stats(self, interface_name=None):
+        """Obtém apenas estatísticas dos peers (mais leve que listar tudo)"""
+        peers = self.api.get_resource('/interface/wireguard/peers')
+        if interface_name:
+            return peers.get(interface=interface_name)
+        return peers.get()
+    

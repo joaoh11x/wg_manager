@@ -157,8 +157,8 @@ class WireGuardPeerService:
                     'endpoint': f"{peer.get('endpoint-address', '')}:{peer.get('endpoint-port', '')}" 
                                if peer.get('endpoint-address') else '',
                     'last_handshake': peer.get('last-handshake', ''),
-                    'transfer_rx': peer.get('transfer-rx', ''),
-                    'transfer_tx': peer.get('transfer-tx', ''),
+                    'rx': peer.get('rx', ''),
+                    'tx': peer.get('tx', ''),
                     'persistent_keepalive': peer.get('persistent-keepalive', '')
                 }
                 formatted_peers.append(formatted_peer)
