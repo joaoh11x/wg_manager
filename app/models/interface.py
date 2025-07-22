@@ -10,4 +10,4 @@ class Interface(Base):
     listen_port = Column(Integer, nullable=False)
 
     # Relacionamento com a tabela de peers
-    peers = relationship("Peer", back_populates="interface")
+    peers = relationship("Peer", back_populates="interface", lazy="select")

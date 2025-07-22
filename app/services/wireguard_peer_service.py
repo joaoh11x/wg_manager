@@ -5,10 +5,17 @@ import base64
 import os
 from cryptography.hazmat.primitives import serialization
 from app.utils.mikrotik_api import MikroTikAPI
+from app.utils.database import DatabaseConnection
+from app.models.interface import Interface
+from app.models.group import Group
+from app.models.peer import Peer
+from sqlalchemy.orm import sessionmaker
 
 class WireGuardPeerService:
     def __init__(self):
         self.mikrotik_api = MikroTikAPI()
+        self.db = DatabaseConnection()
+        self.session = sessionmaker(bind=self.db.engine)
 
     def _get_interface_network(self, interface_name):
         """Obtém a rede configurada na interface"""
@@ -78,7 +85,7 @@ class WireGuardPeerService:
 
         raise ValueError("Não há IPs disponíveis na rede")
 
-    def create_peer(self, name, interface_name, client_dns="8.8.8.8"):
+    def create_peer(self, name, interface_name, client_dns="8.8.8.8", group_id=None):
         """Cria um novo peer WireGuard"""
         try:
             # 1. Gerar chaves
@@ -109,6 +116,10 @@ class WireGuardPeerService:
             # 5. Atualizar o peer com a chave privada (etapa adicional)
             self._update_peer_private_key(name, interface_name, keys['private'])
 
+            # 6. Se um group_id foi fornecido, salvar essa informação no banco de dados
+            if group_id is not None:
+                self._save_peer_group_info(name, interface_name, group_id)
+
             return {
                 'success': True,
                 'peer_name': name,
@@ -116,7 +127,8 @@ class WireGuardPeerService:
                 'peer_ip': peer_ip,
                 'private_key': keys['private'],
                 'public_key': keys['public'],
-                'endpoint': f"{mikrotik_ip}:{listen_port}"
+                'endpoint': f"{mikrotik_ip}:{listen_port}",
+                'group_id': group_id
             }
 
         except Exception as e:
@@ -134,6 +146,40 @@ class WireGuardPeerService:
             raise ValueError("Peer não encontrado para atualização")
 
         peers.set(id=peer[0]['id'], private_key=private_key)
+        
+    def _save_peer_group_info(self, peer_name, interface_name, group_id):
+        """Salva informações do grupo do peer no banco de dados"""
+        session = self.session()
+        try:
+            # Verificar se o peer já existe no banco
+            existing_peer = session.query(Peer).filter_by(name=peer_name).first()
+            
+            if existing_peer:
+                # Atualizar grupo do peer existente
+                existing_peer.group_id = group_id
+            else:
+                # Obter informações do peer do MikroTik para criar registro no banco
+                raw_peers = self.mikrotik_api.list_wireguard_peers()
+                peer_data = next((p for p in raw_peers if p.get('name') == peer_name), None)
+                
+                if peer_data:
+                    # Criar novo registro no banco de dados
+                    new_peer = Peer(
+                        name=peer_name,
+                        email=f"{peer_name}@temp.local",  # Email temporário
+                        public_key=peer_data.get('public-key', ''),
+                        ip_address=peer_data.get('allowed-address', '').split('/')[0],
+                        group_id=group_id
+                    )
+                    session.add(new_peer)
+            
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            # Não falhar a criação do peer se houve problema ao salvar o grupo
+            print(f"Aviso: Não foi possível salvar informações do grupo: {e}")
+        finally:
+            session.close()
         
     def list_peers(self, interface_name=None):
         """Lista todos os peers WireGuard ou filtra por interface"""

@@ -14,12 +14,21 @@ def create_peer():
         return jsonify({"error": "Nome e interface são obrigatórios"}), 400
     
     client_dns = data.get('client_dns', '8.8.8.8')  # DNS opcional, padrão 8.8.8.8
+    group_id = data.get('group_id')  # Grupo opcional
+    
+    # Validar group_id se fornecido
+    if group_id is not None:
+        try:
+            group_id = int(group_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "ID do grupo deve ser um número válido"}), 400
     
     service = WireGuardPeerService()
     result = service.create_peer(
         name=data['name'],
         interface_name=data['interface'],
-        client_dns=client_dns
+        client_dns=client_dns,
+        group_id=group_id
     )
     
     if result['success']:

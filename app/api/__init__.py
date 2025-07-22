@@ -12,7 +12,8 @@ def create_app():
         firewall,
         acl,
         nat,
-        wireguard_peers
+        wireguard_peers,
+        groups
     )
 
     app.register_blueprint(peers.peers_bp)
@@ -24,5 +25,6 @@ def create_app():
     app.register_blueprint(acl.acl_bp)
     app.register_blueprint(nat.nat_bp)
     app.register_blueprint(wireguard_peers.peers_bp)
+    app.register_blueprint(groups.groups_bp)
 
     return app
