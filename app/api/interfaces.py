@@ -77,3 +77,16 @@ def update_interface(name):
         return jsonify({"message": f"Interface '{name}' atualizada com sucesso"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@interfaces_bp.route("/interfaces/<string:name>/stats", methods=["GET"])
+@jwt_required()
+def get_interface_stats(name):
+    """
+    Rota para obter estatísticas da interface WireGuard.
+    """
+    service = WireGuardService()
+    try:
+        stats = service.get_interface_stats(name)
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
