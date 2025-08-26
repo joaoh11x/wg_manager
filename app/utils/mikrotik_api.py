@@ -254,4 +254,17 @@ class MikroTikAPI:
         if interface_name:
             return peers.get(interface=interface_name)
         return peers.get()
-    
+
+    def get_mikrotik_ip(self):
+        """Obtém o IP do MikroTik configurado nas variáveis de ambiente"""
+        return os.getenv("MIKROTIK_HOST")
+
+    def get_wireguard_interface_public_key(self, interface_name):
+        """Obtém a chave pública da interface WireGuard"""
+        try:
+            interfaces = self.api.get_resource('/interface/wireguard').get(name=interface_name)
+            if not interfaces:
+                raise ValueError(f"Interface {interface_name} não encontrada")
+            return interfaces[0].get('public-key', '')
+        except Exception as e:
+            raise Exception(f"Erro ao obter chave pública da interface: {str(e)}")

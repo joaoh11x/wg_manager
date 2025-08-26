@@ -1,7 +1,11 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required
 from app.services.wireguard_peer_service import WireGuardPeerService
 import datetime
+import qrcode
+import io
+import base64
+from PIL import Image
 
 peers_bp = Blueprint('wireguard_peers', __name__)
 
@@ -95,3 +99,155 @@ def get_peers_stats():
             'stats': [],
             'count': 0
         }), 500
+
+@peers_bp.route('/wireguard/peers/<peer_name>/config', methods=['GET'])
+@jwt_required()
+def get_peer_config(peer_name):
+    """Obtém a configuração do cliente para um peer específico"""
+    service = WireGuardPeerService()
+    try:
+        # Obter informações do peer
+        peers_result = service.list_peers()
+        if not peers_result['success']:
+            return jsonify({"error": "Erro ao obter informações do peer"}), 500
+            
+        peer = next((p for p in peers_result['peers'] if p['name'] == peer_name), None)
+        if not peer:
+            return jsonify({"error": "Peer não encontrado"}), 404
+            
+        # Obter informações da interface
+        interface_name = peer['interface']
+        mikrotik_ip = service.mikrotik_api.get_mikrotik_ip()
+        listen_port = service.mikrotik_api.get_wireguard_interface_port(interface_name)
+        server_public_key = service.mikrotik_api.get_wireguard_interface_public_key(interface_name)
+        
+        # Gerar configuração do cliente
+        config = f"""[Interface]
+PrivateKey = {peer['private-key']}
+Address = {peer['allowed_address']}
+DNS = 8.8.8.8
+
+[Peer]
+PublicKey = {server_public_key}
+AllowedIPs = 0.0.0.0/0
+Endpoint = {mikrotik_ip}:{listen_port}
+PersistentKeepalive = 25"""
+        
+        return jsonify({
+            'success': True,
+            'config': config,
+            'peer_name': peer_name
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@peers_bp.route('/wireguard/peers/<peer_name>/config/download', methods=['GET'])
+@jwt_required()
+def download_peer_config(peer_name):
+    """Download da configuração do cliente como arquivo .conf"""
+    service = WireGuardPeerService()
+    try:
+        # Obter informações do peer
+        peers_result = service.list_peers()
+        if not peers_result['success']:
+            return jsonify({"error": "Erro ao obter informações do peer"}), 500
+            
+        peer = next((p for p in peers_result['peers'] if p['name'] == peer_name), None)
+        if not peer:
+            return jsonify({"error": "Peer não encontrado"}), 404
+            
+        # Obter informações da interface
+        interface_name = peer['interface']
+        mikrotik_ip = service.mikrotik_api.get_mikrotik_ip()
+        listen_port = service.mikrotik_api.get_wireguard_interface_port(interface_name)
+        server_public_key = service.mikrotik_api.get_wireguard_interface_public_key(interface_name)
+        
+        # Gerar configuração do cliente
+        config = f"""[Interface]
+PrivateKey = {peer['private-key']}
+Address = {peer['allowed_address']}
+DNS = 8.8.8.8
+
+[Peer]
+PublicKey = {server_public_key}
+AllowedIPs = 0.0.0.0/0
+Endpoint = {mikrotik_ip}:{listen_port}
+PersistentKeepalive = 25"""
+        
+        # Criar arquivo temporário em memória
+        config_file = io.BytesIO()
+        config_file.write(config.encode('utf-8'))
+        config_file.seek(0)
+        
+        return send_file(
+            config_file,
+            as_attachment=True,
+            download_name=f"{peer_name}.conf",
+            mimetype='text/plain'
+        )
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@peers_bp.route('/wireguard/peers/<peer_name>/qrcode', methods=['GET'])
+@jwt_required()
+def get_peer_qrcode(peer_name):
+    """Gera QR Code da configuração do peer"""
+    service = WireGuardPeerService()
+    try:
+        # Obter informações do peer
+        peers_result = service.list_peers()
+        if not peers_result['success']:
+            return jsonify({"error": "Erro ao obter informações do peer"}), 500
+            
+        peer = next((p for p in peers_result['peers'] if p['name'] == peer_name), None)
+        if not peer:
+            return jsonify({"error": "Peer não encontrado"}), 404
+            
+        # Obter informações da interface
+        interface_name = peer['interface']
+        mikrotik_ip = service.mikrotik_api.get_mikrotik_ip()
+        listen_port = service.mikrotik_api.get_wireguard_interface_port(interface_name)
+        server_public_key = service.mikrotik_api.get_wireguard_interface_public_key(interface_name)
+        
+        # Gerar configuração do cliente
+        config = f"""[Interface]
+PrivateKey = {peer['private-key']}
+Address = {peer['allowed_address']}
+DNS = 8.8.8.8
+
+[Peer]
+PublicKey = {server_public_key}
+AllowedIPs = 0.0.0.0/0
+Endpoint = {mikrotik_ip}:{listen_port}
+PersistentKeepalive = 25"""
+        
+        # Gerar QR Code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(config)
+        qr.make(fit=True)
+        
+        # Criar imagem do QR Code
+        qr_image = qr.make_image(fill_color="black", back_color="white")
+        
+        # Converter para base64
+        img_buffer = io.BytesIO()
+        qr_image.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        
+        qr_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
+        return jsonify({
+            'success': True,
+            'qr_code': f"data:image/png;base64,{qr_base64}",
+            'peer_name': peer_name
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

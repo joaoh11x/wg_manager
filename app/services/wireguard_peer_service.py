@@ -205,7 +205,8 @@ class WireGuardPeerService:
                     'last_handshake': peer.get('last-handshake', ''),
                     'rx': peer.get('rx', ''),
                     'tx': peer.get('tx', ''),
-                    'persistent_keepalive': peer.get('persistent-keepalive', '')
+                    'persistent_keepalive': peer.get('persistent-keepalive', ''),
+                    'enabled': peer.get('disabled', 'false') == 'false'  # MikroTik usa 'disabled', invertemos para 'enabled'
                 }
                 formatted_peers.append(formatted_peer)
 
@@ -239,6 +240,31 @@ class WireGuardPeerService:
             return {
                 'success': True,
                 'message': f"Peer {peer_name} removido com sucesso"
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def toggle_peer_status(self, peer_name, enabled):
+        """Ativa ou desativa um peer WireGuard"""
+        try:
+            peers_resource = self.mikrotik_api.api.get_resource('/interface/wireguard/peers')
+            peer = peers_resource.get(name=peer_name)
+            
+            if not peer:
+                raise ValueError(f"Peer {peer_name} não encontrado")
+            
+            # MikroTik usa 'disabled' (true/false), então invertemos
+            disabled_value = 'false' if enabled else 'true'
+            peers_resource.set(id=peer[0]['id'], disabled=disabled_value)
+            
+            return {
+                'success': True,
+                'message': f"Peer {peer_name} {'ativado' if enabled else 'desativado'} com sucesso",
+                'enabled': enabled
             }
             
         except Exception as e:
