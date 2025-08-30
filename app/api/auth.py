@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
-from app.utils.security import verify_password
-from app.utils.database import get_db_connection
+from sqlalchemy.orm import sessionmaker
+from app.models.user import User
+from app.utils.database import DatabaseConnection
 
 # Cria um Blueprint para as rotas de autenticação
 auth_bp = Blueprint("auth", __name__)
@@ -21,14 +22,25 @@ def login():
     password = data["password"]
 
     # Busca o usuário no banco de dados
-    conn = get_db_connection()
-    user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-    conn.close()
-
-    # Verifica se o usuário existe e a senha está correta
-    if user and verify_password(password, user["password"]):
-        # Gera um token JWT
-        access_token = create_access_token(identity=username)
-        return jsonify({"access_token": access_token}), 200
-    else:
-        return jsonify({"error": "Usuário ou senha inválidos"}), 401
+    db = DatabaseConnection()
+    Session = sessionmaker(bind=db.engine)
+    session = Session()
+    
+    try:
+        user = session.query(User).filter_by(username=username).first()
+        
+        # Verifica se o usuário existe e a senha está correta
+        if user and user.verify_password(password):
+            # Gera um token JWT
+            access_token = create_access_token(identity=username)
+            return jsonify({
+                "access_token": access_token,
+                "user": {
+                    "username": user.username,
+                    "avatar": user.avatar.decode('utf-8') if user.avatar else None
+                }
+            }), 200
+        else:
+            return jsonify({"error": "Usuário ou senha inválidos"}), 401
+    finally:
+        session.close()

@@ -183,6 +183,7 @@ class WireGuardPeerService:
         
     def list_peers(self, interface_name=None):
         """Lista todos os peers WireGuard ou filtra por interface"""
+        session = self.session()
         try:
             # Obter todos os peers do MikroTik
             raw_peers = self.mikrotik_api.list_wireguard_peers()
@@ -191,6 +192,12 @@ class WireGuardPeerService:
             if interface_name:
                 raw_peers = [peer for peer in raw_peers if peer.get('interface') == interface_name]
 
+            # Obter informações de grupo do banco de dados
+            peer_names = [p.get('name') for p in raw_peers if p.get('name')]
+            db_peers = {}
+            if peer_names:
+                db_peers = {p.name: p for p in session.query(Peer).filter(Peer.name.in_(peer_names)).all()}
+
             # Formatar os dados de retorno
             formatted_peers = []
             for peer in raw_peers:
@@ -198,6 +205,10 @@ class WireGuardPeerService:
                     'name': peer.get('name', ''),
                     'interface': peer.get('interface', ''),
                     'public_key': peer.get('public-key', ''),
+                    'group': {
+                        'id': db_peers.get(peer.get('name'), Peer()).group_id,
+                        'name': db_peers.get(peer.get('name'), Peer()).group.name if db_peers.get(peer.get('name')) and db_peers[peer.get('name')].group else None
+                    } if peer.get('name') in db_peers else None,
                     'private-key': peer.get('private-key', ''),
                     'allowed_address': peer.get('allowed-address', ''),
                     'endpoint': f"{peer.get('endpoint-address', '')}:{peer.get('endpoint-port', '')}" 
@@ -223,9 +234,12 @@ class WireGuardPeerService:
                 'peers': [],
                 'count': 0
             }
+        finally:
+            session.close()
     
     def delete_peer(self, peer_name):
         """Remove um peer WireGuard pelo nome"""
+        session = self.session()
         try:
             # Verificar se o peer existe
             peers = self.mikrotik_api.list_wireguard_peers()
@@ -234,8 +248,14 @@ class WireGuardPeerService:
             if not peer_exists:
                 raise ValueError(f"Peer {peer_name} não encontrado")
                 
-            # Remover o peer
+            # Remover o peer do MikroTik
             self.mikrotik_api.delete_wireguard_peer(peer_name)
+            
+            # Remover o peer do banco de dados se existir
+            peer = session.query(Peer).filter_by(name=peer_name).first()
+            if peer:
+                session.delete(peer)
+                session.commit()
             
             return {
                 'success': True,
@@ -243,10 +263,13 @@ class WireGuardPeerService:
             }
             
         except Exception as e:
+            session.rollback()
             return {
                 'success': False,
                 'error': str(e)
             }
+        finally:
+            session.close()
     
     def toggle_peer_status(self, peer_name, enabled):
         """Ativa ou desativa um peer WireGuard"""
@@ -272,3 +295,58 @@ class WireGuardPeerService:
                 'success': False,
                 'error': str(e)
             }
+            
+    def update_peer_group(self, peer_name, group_id):
+        """Atualiza o grupo de um peer"""
+        session = self.session()
+        try:
+            # Verificar se o peer existe no banco de dados
+            peer = session.query(Peer).filter_by(name=peer_name).first()
+            if not peer:
+                # Se o peer não existe no banco, criar um registro para ele
+                raw_peers = self.mikrotik_api.list_wireguard_peers()
+                peer_data = next((p for p in raw_peers if p.get('name') == peer_name), None)
+                
+                if not peer_data:
+                    raise ValueError(f"Peer {peer_name} não encontrado no MikroTik")
+                
+                # Criar novo registro no banco de dados
+                peer = Peer(
+                    name=peer_name,
+                    email=f"{peer_name}@temp.local",
+                    public_key=peer_data.get('public-key', ''),
+                    ip_address=peer_data.get('allowed-address', '').split('/')[0] if peer_data.get('allowed-address') else '',
+                    group_id=group_id
+                )
+                session.add(peer)
+            
+            # Se group_id for None, remove o grupo atual
+            if group_id is None:
+                peer.group_id = None
+            else:
+                # Verificar se o grupo existe
+                group = session.query(Group).filter_by(id=group_id).first()
+                if not group:
+                    raise ValueError(f"Grupo com ID {group_id} não encontrado")
+                peer.group_id = group_id
+            
+            session.commit()
+            
+            # Atualizar o objeto peer para incluir as informações do grupo
+            session.refresh(peer)
+            
+            return {
+                'success': True,
+                'message': f"Grupo do peer {peer_name} atualizado com sucesso",
+                'peer': peer.to_dict()
+            }
+            
+        except Exception as e:
+            session.rollback()
+            return {
+                'success': False,
+                'error': str(e)
+            }
+            
+        finally:
+            session.close()

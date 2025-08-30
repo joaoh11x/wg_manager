@@ -1,5 +1,8 @@
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required
+import qrcode
+import io
+import base64
 from app.services.wireguard_peer_service import WireGuardPeerService
 import datetime
 import qrcode
@@ -60,6 +63,66 @@ def delete_peer(peer_name):
         return jsonify({"message": f"Peer {peer_name} removido"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+@peers_bp.route('/wireguard/peers/<peer_name>/group', methods=['PUT'])
+@jwt_required()
+def update_peer_group(peer_name):
+    """
+    Atualiza ou remove o grupo de um peer
+    
+    Parâmetros:
+    - peer_name: Nome do peer a ser atualizado
+    
+    Corpo da requisição (JSON):
+    {
+        "group_id": 1  // ID do grupo ou null para remover do grupo atual
+    }
+    
+    Retorna:
+    - 200: Grupo atualizado com sucesso
+    - 400: Requisição inválida
+    - 404: Peer não encontrado
+    - 500: Erro interno do servidor
+    """
+    data = request.get_json(silent=True) or {}
+    
+    if 'group_id' not in data:
+        return jsonify({
+            "success": False,
+            "error": "O campo 'group_id' é obrigatório. Use null para remover o peer de todos os grupos."
+        }), 400
+    
+    try:
+        # Permite group_id ser None (para remoção) ou um número inteiro
+        group_id = None if data['group_id'] is None else int(data['group_id'])
+    except (ValueError, TypeError):
+        return jsonify({
+            "success": False,
+            "error": "O ID do grupo deve ser um número inteiro válido ou null"
+        }), 400
+    
+    try:
+        service = WireGuardPeerService()
+        result = service.update_peer_group(peer_name=peer_name, group_id=group_id)
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "message": result.get('message', 'Grupo atualizado com sucesso'),
+                "peer": result.get('peer')
+            }), 200
+        else:
+            status_code = 404 if 'não encontrado' in result.get('error', '').lower() else 400
+            return jsonify({
+                "success": False,
+                "error": result.get('error', 'Erro ao atualizar o grupo do peer')
+            }), status_code
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Erro interno ao processar a requisição: {str(e)}"
+        }), 500
     
 @peers_bp.route('/wireguard/peers/stats', methods=['GET'])
 @jwt_required()

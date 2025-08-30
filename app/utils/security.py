@@ -1,20 +1,17 @@
 # app/utils/security.py
-import bcrypt
+from passlib.context import CryptContext
 
-def hash_password(password: str) -> str:
+# Configuração do contexto de hash de senha
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
     """
     Gera um hash seguro para a senha.
     """
-    salt = bcrypt.gensalt()
-    hashed_password = bcrypt.hashpw(password.encode("utf-8"), salt)
-    return hashed_password.decode("utf-8")
+    return pwd_context.hash(password)
 
-def verify_password(password: str, hashed_password: str) -> bool:
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
-    Verifica se a senha corresponde ao hash armazenado.
+    Verifica se a senha em texto puro corresponde ao hash armazenado.
     """
-    try:
-        return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
-    except ValueError as e:
-        print(f"Erro ao verificar a senha: {e}")
-        return False
+    return pwd_context.verify(plain_password, hashed_password)
