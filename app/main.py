@@ -21,21 +21,23 @@ from app.utils.database import DatabaseConnection
 
 # Initialize Flask app
 app = create_app()
-CORS(app)
+
+# Configuração CORS para permitir todas as origens e cabeçalhos necessários
+CORS(app, 
+     resources={
+         r"/*": {
+             "origins": "*",
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization"],
+             "expose_headers": ["Content-Type"],
+             "supports_credentials": True,
+             "max_age": 3600
+         }
+     })
 
 def init_db():
     # Initialize database connection
     db = DatabaseConnection()
-    
-    # Default groups
-    default_groups = [
-        {"name": "RH", "description": "Departamento de Recursos Humanos"},
-        {"name": "Suporte", "description": "Equipe de Suporte Técnico"},
-        {"name": "Infra", "description": "Equipe de Infraestrutura"},
-        {"name": "Desenvolvimento", "description": "Equipe de Desenvolvimento"},
-        {"name": "Vendas", "description": "Departamento de Vendas"},
-        {"name": "Administração", "description": "Departamento Administrativo"}
-    ]
     
     # Check if tables exist
     inspector = inspect(db.engine)
@@ -52,21 +54,12 @@ def init_db():
             if not admin:
                 admin = User(
                     username="admin",
-                    password=User.get_password_hash("senha_segura"),
-                    avatar=None
+                    email="admin@example.com",
+                    password="senha_segura"
                 )
                 session.add(admin)
                 print(" Admin user created successfully!")
-            
-            # Create default groups if they don't exist
-            existing_groups = session.query(Group).count()
-            if existing_groups == 0:
-                for group_data in default_groups:
-                    group = Group(name=group_data["name"], description=group_data["description"])
-                    session.add(group)
-                print(" Default groups created successfully!")
-            
-            session.commit()
+                session.commit()
             
         except Exception as e:
             session.rollback()

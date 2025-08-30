@@ -107,8 +107,6 @@ pywinpty==2.0.15
 PyYAML==6.0.2
 pyzmq==26.2.1
 qrcode==8.0
-# Editable install with no version control (qts_trabalho==0.1)
--e c:\users\vagnh\desktop\qts trabalho
 referencing==0.36.2
 requests==2.32.3
 rfc3339-validator==0.1.4

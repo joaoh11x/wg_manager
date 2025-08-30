@@ -1,8 +1,10 @@
+import base64
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
 from sqlalchemy.orm import sessionmaker
 from app.models.user import User
 from app.utils.database import DatabaseConnection
+from app.utils.avatar_utils import avatar_to_base64
 
 # Cria um Blueprint para as rotas de autenticação
 auth_bp = Blueprint("auth", __name__)
@@ -33,11 +35,18 @@ def login():
         if user and user.verify_password(password):
             # Gera um token JWT
             access_token = create_access_token(identity=username)
+            
+            # Converte o avatar para base64 se existir
+            avatar_base64 = None
+            if user.avatar:
+                avatar_base64 = f"data:image/png;base64,{base64.b64encode(user.avatar).decode('utf-8')}"
+            
             return jsonify({
                 "access_token": access_token,
                 "user": {
                     "username": user.username,
-                    "avatar": user.avatar.decode('utf-8') if user.avatar else None
+                    "avatar": avatar_base64,
+                    "email": user.email if hasattr(user, 'email') else f"{user.username}@example.com"
                 }
             }), 200
         else:

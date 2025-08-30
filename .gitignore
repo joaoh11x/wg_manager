@@ -36,6 +36,7 @@ htmlcov/
 # Ignora arquivos de log e banco de dados
 *.log
 *.sqlite3
+database.db
 
 # Ignora arquivos de sistema
 .DS_Store
