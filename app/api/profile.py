@@ -17,12 +17,27 @@ def upload_avatar():
     """
     if 'avatar' not in request.files:
         return jsonify({"error": "No file part"}), 400
-    
+
     file = request.files['avatar']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
-    
-    # Process the uploaded image
+
+    # Validação de tipo e tamanho
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+    max_file_size = 2 * 1024 * 1024  # 2MB
+
+    filename = secure_filename(file.filename)
+    file_ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    if file_ext not in allowed_extensions:
+        return jsonify({"error": "Tipo de arquivo não permitido. Apenas png, jpg, jpeg, gif."}), 400
+
+    file.seek(0, os.SEEK_END)
+    file_length = file.tell()
+    file.seek(0)
+    if file_length > max_file_size:
+        return jsonify({"error": "Arquivo muito grande. Máximo permitido: 2MB."}), 400
+
+    # Processa a imagem
     avatar_data = process_avatar(file)
     if not avatar_data:
         return jsonify({"error": "Invalid image file"}), 400
