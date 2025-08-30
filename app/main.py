@@ -52,15 +52,18 @@ def init_db():
             # Create admin user if it doesn't exist
             admin = session.query(User).filter_by(username="admin").first()
             if not admin:
+                admin_password = os.getenv("ADMIN_PASSWORD")
+                if not admin_password or len(admin_password) < 12:
+                    print(" Error: ADMIN_PASSWORD must be set in .env and have at least 12 characters.")
+                    raise ValueError("ADMIN_PASSWORD must be set and strong.")
                 admin = User(
                     username="admin",
                     email="admin@example.com",
-                    password="senha_segura"
+                    password=admin_password
                 )
                 session.add(admin)
                 print(" Admin user created successfully!")
                 session.commit()
-            
         except Exception as e:
             session.rollback()
             print(f" Error initializing database: {e}")
