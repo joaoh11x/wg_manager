@@ -2,15 +2,25 @@ import os
 from dotenv import load_dotenv
 from routeros_api import RouterOsApiPool
 
+# Garante carregamento do .env mesmo que instância seja criada antes do main
+load_dotenv()
+
 class MikroTikAPI:
     def __init__(self):
-        self.connection = RouterOsApiPool(
-            host=os.getenv("MIKROTIK_HOST"),  # Endereço IP do MikroTik
-            username=os.getenv("MIKROTIK_USER"),  # Nome de usuário do MikroTik
-            password=os.getenv("MIKROTIK_PASS"),  # Senha do MikroTik
-            plaintext_login=True  # Use False se estiver usando SSL/TLS
-        )
-        self.api = self.connection.get_api()
+        host = os.getenv("MIKROTIK_HOST")
+        user = os.getenv("MIKROTIK_USER")
+        password = os.getenv("MIKROTIK_PASS")
+
+        try:
+            self.connection = RouterOsApiPool(
+                host=host,
+                username=user,
+                password=password,
+                plaintext_login=True  # Ajustar para False se usar TLS
+            )
+            self.api = self.connection.get_api()
+        except Exception as e:
+            raise RuntimeError(f"Falha ao conectar ao MikroTik em {host}: {e}. Verifique IP, usuário, senha e se a API (porta 8728) está habilitada.")
 
     def create_interface(self, name, listen_port):
         """
@@ -268,3 +278,40 @@ class MikroTikAPI:
             return interfaces[0].get('public-key', '')
         except Exception as e:
             raise Exception(f"Erro ao obter chave pública da interface: {str(e)}")
+
+    def get_system_resources(self):
+        """Retorna métricas de CPU e memória do MikroTik.
+
+        Usa o recurso '/system/resource' para obter informações como:
+        - cpu-load (porcentagem)
+        - free-memory (bytes)
+        - total-memory (bytes)
+        - cpu-count
+        - cpu-frequency (MHz)
+        - uptime
+        """
+        try:
+            resource = self.api.get_resource('/system/resource')
+            data = resource.get()
+            if not data:
+                raise Exception("Nenhum dado retornado de /system/resource")
+            info = data[0]
+            def safe_int(value):
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return 0
+
+            return {
+                'cpu_load': safe_int(info.get('cpu-load')),
+                'free_memory': safe_int(info.get('free-memory')),
+                'total_memory': safe_int(info.get('total-memory')),
+                'cpu_count': safe_int(info.get('cpu-count')),
+                'cpu_frequency': safe_int(info.get('cpu-frequency')),
+                'architecture_name': info.get('architecture-name', ''),
+                'board_name': info.get('board-name', ''),
+                'version': info.get('version', ''),
+                'uptime': info.get('uptime', ''),
+            }
+        except Exception as e:
+            raise Exception(f"Erro ao obter recursos do sistema: {str(e)}")

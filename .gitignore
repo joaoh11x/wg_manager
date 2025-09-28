@@ -41,3 +41,6 @@ database.db
 # Ignora arquivos de sistema
 .DS_Store
 Thumbs.db
+
+# Ignora arquivos de banco de dados
+*.db
