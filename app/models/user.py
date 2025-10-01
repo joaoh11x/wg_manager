@@ -10,14 +10,16 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
+    display_name = Column(String, nullable=True)
     email = Column(String, unique=True, index=True, nullable=True)
     password = Column(String, nullable=False)
     avatar = Column(LargeBinary, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
-    def __init__(self, username: str, password: str, email: str = None, avatar: bytes = None):
+    def __init__(self, username: str, password: str, email: str = None, avatar: bytes = None, display_name: str = None):
         self.username = username
+        self.display_name = display_name or username
         self.email = email or f"{username}@example.com"
         self.password = self.get_password_hash(password)
         self.avatar = avatar or get_default_avatar()
