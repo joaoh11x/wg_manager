@@ -85,21 +85,27 @@ class WireGuardPeerService:
 
         raise ValueError("Não há IPs disponíveis na rede")
 
-    def create_peer(self, name, interface_name, client_dns="8.8.8.8", group_id=None):
+    def create_peer(self, name, email, interface_name, client_dns="8.8.8.8", group_id=None):
         """Cria um novo peer WireGuard"""
+        session = self.session()
         try:
-            # 1. Gerar chaves
+            # 1. Verificar se a interface existe no banco de dados
+            interface = session.query(Interface).filter_by(name=interface_name).first()
+            if not interface:
+                raise ValueError(f"Interface '{interface_name}' não encontrada no banco de dados.")
+
+            # 2. Gerar chaves
             keys = self._generate_valid_keypair()
 
-            # 2. Obter rede e IP disponível
+            # 3. Obter rede e IP disponível
             network = self._get_interface_network(interface_name)
             peer_ip = self._get_next_available_ip(network, interface_name)
 
-            # 3. Obter o IP do MikroTik e a porta da interface
+            # 4. Obter o IP do MikroTik e a porta da interface
             mikrotik_ip = os.getenv("MIKROTIK_HOST")
             listen_port = self.mikrotik_api.get_wireguard_interface_port(interface_name)
 
-            # 4. Criar peer no MikroTik
+            # 5. Criar peer no MikroTik
             self.mikrotik_api.create_wireguard_peer_safe(
                 name=name,
                 interface=interface_name,
@@ -113,12 +119,19 @@ class WireGuardPeerService:
                 responder=True
             )
 
-            # 5. Atualizar o peer com a chave privada (etapa adicional)
-            self._update_peer_private_key(name, interface_name, keys['private'])
+            # 6. Salvar o peer no banco de dados
+            self._save_peer_to_db(
+                session,
+                name=name,
+                email=email,
+                public_key=keys['public'],
+                ip_address=peer_ip.split('/')[0],
+                interface_id=interface.id,
+                group_id=group_id
+            )
 
-            # 6. Se um group_id foi fornecido, salvar essa informação no banco de dados
-            if group_id is not None:
-                self._save_peer_group_info(name, interface_name, group_id)
+            # 7. Atualizar o peer com a chave privada (etapa adicional)
+            self._update_peer_private_key(name, interface_name, keys['private'])
 
             return {
                 'success': True,
@@ -132,10 +145,13 @@ class WireGuardPeerService:
             }
 
         except Exception as e:
+            session.rollback()
             return {
                 'success': False,
                 'error': str(e)
             }
+        finally:
+            session.close()
 
     def _update_peer_private_key(self, peer_name, interface_name, private_key):
         """Atualiza a chave privada do peer após criação"""
@@ -147,39 +163,37 @@ class WireGuardPeerService:
 
         peers.set(id=peer[0]['id'], private_key=private_key)
         
-    def _save_peer_group_info(self, peer_name, interface_name, group_id):
-        """Salva informações do grupo do peer no banco de dados"""
-        session = self.session()
+    def _save_peer_to_db(self, session, name, email, public_key, ip_address, interface_id, group_id):
+        """Salva ou atualiza um peer no banco de dados"""
         try:
             # Verificar se o peer já existe no banco
-            existing_peer = session.query(Peer).filter_by(name=peer_name).first()
+            existing_peer = session.query(Peer).filter_by(name=name).first()
             
             if existing_peer:
-                # Atualizar grupo do peer existente
+                # Atualizar peer existente
+                existing_peer.email = email
+                existing_peer.public_key = public_key
+                existing_peer.ip_address = ip_address
+                existing_peer.interface_id = interface_id
                 existing_peer.group_id = group_id
             else:
-                # Obter informações do peer do MikroTik para criar registro no banco
-                raw_peers = self.mikrotik_api.list_wireguard_peers()
-                peer_data = next((p for p in raw_peers if p.get('name') == peer_name), None)
-                
-                if peer_data:
-                    # Criar novo registro no banco de dados
-                    new_peer = Peer(
-                        name=peer_name,
-                        email=f"{peer_name}@temp.local",  # Email temporário
-                        public_key=peer_data.get('public-key', ''),
-                        ip_address=peer_data.get('allowed-address', '').split('/')[0],
-                        group_id=group_id
-                    )
-                    session.add(new_peer)
+                # Criar novo registro no banco de dados
+                new_peer = Peer(
+                    name=name,
+                    email=email,
+                    public_key=public_key,
+                    ip_address=ip_address,
+                    interface_id=interface_id,
+                    group_id=group_id
+                )
+                session.add(new_peer)
             
             session.commit()
         except Exception as e:
             session.rollback()
-            # Não falhar a criação do peer se houve problema ao salvar o grupo
-            print(f"Aviso: Não foi possível salvar informações do grupo: {e}")
-        finally:
-            session.close()
+            # Não falhar a criação do peer se houve problema ao salvar no banco
+            print(f"Aviso: Não foi possível salvar o peer no banco de dados: {e}")
+            raise e
         
     def list_peers(self, interface_name=None):
         """Lista todos os peers WireGuard ou filtra por interface"""
@@ -192,7 +206,7 @@ class WireGuardPeerService:
             if interface_name:
                 raw_peers = [peer for peer in raw_peers if peer.get('interface') == interface_name]
 
-            # Obter informações de grupo do banco de dados
+            # Obter informações do nosso banco de dados
             peer_names = [p.get('name') for p in raw_peers if p.get('name')]
             db_peers = {}
             if peer_names:
@@ -201,14 +215,18 @@ class WireGuardPeerService:
             # Formatar os dados de retorno
             formatted_peers = []
             for peer in raw_peers:
+                peer_name = peer.get('name', '')
+                db_peer_info = db_peers.get(peer_name)
+
                 formatted_peer = {
-                    'name': peer.get('name', ''),
+                    'name': peer_name,
                     'interface': peer.get('interface', ''),
                     'public_key': peer.get('public-key', ''),
+                    'email': db_peer_info.email if db_peer_info else None,
                     'group': {
-                        'id': db_peers.get(peer.get('name'), Peer()).group_id,
-                        'name': db_peers.get(peer.get('name'), Peer()).group.name if db_peers.get(peer.get('name')) and db_peers[peer.get('name')].group else None
-                    } if peer.get('name') in db_peers else None,
+                        'id': db_peer_info.group_id,
+                        'name': db_peer_info.group.name if db_peer_info and db_peer_info.group else None
+                    } if db_peer_info else None,
                     'private-key': peer.get('private-key', ''),
                     'allowed_address': peer.get('allowed-address', ''),
                     'endpoint': f"{peer.get('endpoint-address', '')}:{peer.get('endpoint-port', '')}" 
@@ -217,7 +235,7 @@ class WireGuardPeerService:
                     'rx': peer.get('rx', ''),
                     'tx': peer.get('tx', ''),
                     'persistent_keepalive': peer.get('persistent-keepalive', ''),
-                    'enabled': peer.get('disabled', 'false') == 'false'  # MikroTik usa 'disabled', invertemos para 'enabled'
+                    'enabled': peer.get('disabled', 'false') == 'false'
                 }
                 formatted_peers.append(formatted_peer)
 

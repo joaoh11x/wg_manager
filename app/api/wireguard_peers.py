@@ -17,8 +17,8 @@ peers_bp = Blueprint('wireguard_peers', __name__)
 def create_peer():
     data = request.json
     
-    if not data or 'name' not in data or 'interface' not in data:
-        return jsonify({"error": "Nome e interface são obrigatórios"}), 400
+    if not data or 'name' not in data or 'interface' not in data or 'email' not in data:
+        return jsonify({"error": "Nome, email e interface são obrigatórios"}), 400
     
     client_dns = data.get('client_dns', '8.8.8.8')  # DNS opcional, padrão 8.8.8.8
     group_id = data.get('group_id')  # Grupo opcional
@@ -31,8 +31,10 @@ def create_peer():
             return jsonify({"error": "ID do grupo deve ser um número válido"}), 400
     
     service = WireGuardPeerService()
+    # Passando o email para o serviço
     result = service.create_peer(
         name=data['name'],
+        email=data['email'], 
         interface_name=data['interface'],
         client_dns=client_dns,
         group_id=group_id
