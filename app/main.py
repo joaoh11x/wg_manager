@@ -1,7 +1,6 @@
 import os
 import sys
 
-# Garante que o diretório raiz esteja no PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.api import create_app
