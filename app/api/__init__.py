@@ -11,7 +11,6 @@ def create_app():
     # Carrega configurações centralizadas
     app.config.from_object(Config)
 
-    # Configuração de CORS (antes estava no main.py)
     frontend_origin = app.config.get("FRONTEND_ORIGIN", "http://localhost:3000")
     CORS(
         app,
