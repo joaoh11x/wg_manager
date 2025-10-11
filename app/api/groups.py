@@ -12,12 +12,21 @@ def create_group():
     
     if not data or 'name' not in data:
         return jsonify({"error": "Nome do grupo é obrigatório"}), 400
-    
-    name = data['name'].strip()
+
+    # Validar nome como string não vazia
+    raw_name = data.get('name')
+    if not isinstance(raw_name, str):
+        return jsonify({"error": "Nome do grupo deve ser um texto"}), 400
+    name = raw_name.strip()
     if not name:
         return jsonify({"error": "Nome do grupo não pode ser vazio"}), 400
-    
-    description = data.get('description', '').strip() or None
+
+    # description pode vir como null (None) do front-end; tratar com segurança
+    raw_description = data.get('description')
+    if isinstance(raw_description, str):
+        description = raw_description.strip() or None
+    else:
+        description = None
     
     service = GroupService()
     result = service.create_group(name=name, description=description)
@@ -63,11 +72,17 @@ def update_group(group_id):
     name = data.get('name')
     description = data.get('description')
     
-    # Validar nome se fornecido
     if name is not None:
+        if not isinstance(name, str):
+            return jsonify({"error": "Nome do grupo deve ser um texto"}), 400
         name = name.strip()
         if not name:
             return jsonify({"error": "Nome do grupo não pode ser vazio"}), 400
+
+    if description is not None and not isinstance(description, str):
+        description = None
+    elif isinstance(description, str):
+        description = description.strip() or None
     
     service = GroupService()
     result = service.update_group(group_id, name=name, description=description)

@@ -151,29 +151,45 @@ class WireGuardPeerService:
         """Salva informações do grupo do peer no banco de dados"""
         session = self.session()
         try:
-            # Verificar se o peer já existe no banco
+            # Tentar localizar o peer existente por várias chaves únicas antes de inserir
             existing_peer = session.query(Peer).filter_by(name=peer_name).first()
-            
-            if existing_peer:
-                # Atualizar grupo do peer existente
-                existing_peer.group_id = group_id
-            else:
-                # Obter informações do peer do MikroTik para criar registro no banco
+
+            if not existing_peer:
                 raw_peers = self.mikrotik_api.list_wireguard_peers()
                 peer_data = next((p for p in raw_peers if p.get('name') == peer_name), None)
-                
-                if peer_data:
-                    # Criar novo registro no banco de dados
+                public_key = peer_data.get('public-key') if peer_data else None
+                ip_addr = (
+                    peer_data.get('allowed-address', '').split('/')[0]
+                    if peer_data and peer_data.get('allowed-address')
+                    else None
+                )
+
+                # Procurar por public_key
+                if public_key:
+                    existing_peer = session.query(Peer).filter_by(public_key=public_key).first()
+
+                # Procurar por ip_address se ainda não encontrou
+                if not existing_peer and ip_addr:
+                    existing_peer = session.query(Peer).filter_by(ip_address=ip_addr).first()
+
+                # Se ainda não existir, criar novo registro com segurança
+                if not existing_peer and peer_data:
                     new_peer = Peer(
                         name=peer_name,
                         email=f"{peer_name}@temp.local",  # Email temporário
-                        public_key=peer_data.get('public-key', ''),
-                        ip_address=peer_data.get('allowed-address', '').split('/')[0],
+                        public_key=public_key or '',
+                        ip_address=ip_addr or '',
                         group_id=group_id
                     )
                     session.add(new_peer)
-            
-            session.commit()
+                    session.commit()
+                    session.refresh(new_peer)
+                    return
+
+            # Atualizar grupo do peer existente (se encontrou)
+            if existing_peer:
+                existing_peer.group_id = group_id
+                session.commit()
         except Exception as e:
             session.rollback()
             # Não falhar a criação do peer se houve problema ao salvar o grupo
@@ -300,25 +316,40 @@ class WireGuardPeerService:
         """Atualiza o grupo de um peer"""
         session = self.session()
         try:
-            # Verificar se o peer existe no banco de dados
+            # 1) Tentar encontrar por nome
             peer = session.query(Peer).filter_by(name=peer_name).first()
+
+            # 2) Se não houver, buscar dados no MikroTik e tentar casar por chaves únicas
+            peer_data = None
             if not peer:
-                # Se o peer não existe no banco, criar um registro para ele
                 raw_peers = self.mikrotik_api.list_wireguard_peers()
                 peer_data = next((p for p in raw_peers if p.get('name') == peer_name), None)
-                
                 if not peer_data:
                     raise ValueError(f"Peer {peer_name} não encontrado no MikroTik")
-                
-                # Criar novo registro no banco de dados
-                peer = Peer(
-                    name=peer_name,
-                    email=f"{peer_name}@temp.local",
-                    public_key=peer_data.get('public-key', ''),
-                    ip_address=peer_data.get('allowed-address', '').split('/')[0] if peer_data.get('allowed-address') else '',
-                    group_id=group_id
-                )
-                session.add(peer)
+
+                public_key = peer_data.get('public-key')
+                ip_addr = peer_data.get('allowed-address', '').split('/')[0] if peer_data.get('allowed-address') else None
+
+                if public_key:
+                    peer = session.query(Peer).filter_by(public_key=public_key).first()
+
+                if not peer and ip_addr:
+                    peer = session.query(Peer).filter_by(ip_address=ip_addr).first()
+
+                # 3) Se ainda não existir no banco, criar novo registro
+                if not peer:
+                    # Evitar criar registros sem nenhum identificador único
+                    if not public_key and not ip_addr:
+                        raise ValueError(
+                            "Não foi possível obter public_key ou ip_address do peer no MikroTik para sincronizar com o banco de dados"
+                        )
+                    peer = Peer(
+                        name=peer_name,
+                        email=f"{peer_name}@temp.local",
+                        public_key=public_key or '',
+                        ip_address=ip_addr or '',
+                    )
+                    session.add(peer)
             
             # Se group_id for None, remove o grupo atual
             if group_id is None:
@@ -332,7 +363,6 @@ class WireGuardPeerService:
             
             session.commit()
             
-            # Atualizar o objeto peer para incluir as informações do grupo
             session.refresh(peer)
             
             return {
