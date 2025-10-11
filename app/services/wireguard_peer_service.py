@@ -11,6 +11,7 @@ from app.models.group import Group
 from app.models.peer import Peer
 from sqlalchemy.orm import sessionmaker
 
+
 class WireGuardPeerService:
     def __init__(self):
         self.mikrotik_api = MikroTikAPI()
@@ -22,7 +23,7 @@ class WireGuardPeerService:
         ips = self.mikrotik_api.get_interface_ips(interface_name)
         if not ips:
             raise ValueError(f"Interface {interface_name} não possui IP configurado")
-        
+
         interface_ip = ips[0]['address']
         return ip_network(interface_ip, strict=False)
 
@@ -30,32 +31,29 @@ class WireGuardPeerService:
         """Gera chaves no formato que o MikroTik aceita"""
         private_key = x25519.X25519PrivateKey.generate()
         public_key = private_key.public_key()
-    
+
         private_key_bytes = private_key.private_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PrivateFormat.Raw,
             encryption_algorithm=serialization.NoEncryption()
         )
-    
+
         public_key_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw
         )
-    
+
         private_key_b64 = base64.b64encode(private_key_bytes).decode('ascii')
         public_key_b64 = base64.b64encode(public_key_bytes).decode('ascii')
-    
-        # Verificação para validação das chaves
-        if (len(private_key_b64) != 44 or 
-            len(public_key_b64) != 44 or
-            not private_key_b64.endswith('=') or
-            not public_key_b64.endswith('=')):
+
+        # Validações simples — base64 de 32 bytes vira 44 chars com padding "==".
+        if len(private_key_b64) != 44 or len(public_key_b64) != 44:
             raise ValueError("Formato de chave inválido gerado")
-        
-        # Verifica se a chave não é uma sequência repetitiva
+
+        # Evita chaves triviais
         if private_key_b64 == 'A' * 44:
             raise ValueError("Chave privada inválida gerada")
-    
+
         return {
             'private': private_key_b64,
             'public': public_key_b64
@@ -76,30 +74,35 @@ class WireGuardPeerService:
             if peer.get('allowed-address')
         ]
 
-        # 3. Procurar próximo IP disponível
+        # 3. Procurar próximo IP disponível (hosts() já pula network & broadcast)
         for host in network.hosts():
-            if (host not in used_ips and 
-                host != network.network_address and
-                host != server_ip):
+            if (host not in used_ips and host != server_ip):
                 return f"{host}/32"
 
         raise ValueError("Não há IPs disponíveis na rede")
 
-    def create_peer(self, name, interface_name, client_dns="8.8.8.8", group_id=None):
+    def create_peer(self, name, email, interface_name, client_dns="8.8.8.8", group_id=None):
         """Cria um novo peer WireGuard"""
+        session = self.session()
         try:
-            # 1. Gerar chaves
+            # 1. Verificar se a interface existe no banco de dados
+            interface = session.query(Interface).filter_by(name=interface_name).first()
+            if not interface:
+                raise ValueError(f"Interface '{interface_name}' não encontrada no banco de dados.")
+
+            # 2. Gerar chaves
             keys = self._generate_valid_keypair()
 
-            # 2. Obter rede e IP disponível
+            # 3. Obter rede e IP disponível
             network = self._get_interface_network(interface_name)
             peer_ip = self._get_next_available_ip(network, interface_name)
 
-            # 3. Obter o IP do MikroTik e a porta da interface
+            # 4. Obter o IP do MikroTik e a porta da interface
             mikrotik_ip = os.getenv("MIKROTIK_HOST")
             listen_port = self.mikrotik_api.get_wireguard_interface_port(interface_name)
 
-            # 4. Criar peer no MikroTik
+            # 5. Criar peer no MikroTik
+            # Observação: assumo que create_wireguard_peer_safe aceita esses parâmetros
             self.mikrotik_api.create_wireguard_peer_safe(
                 name=name,
                 interface=interface_name,
@@ -113,12 +116,30 @@ class WireGuardPeerService:
                 responder=True
             )
 
-            # 5. Atualizar o peer com a chave privada (etapa adicional)
-            self._update_peer_private_key(name, interface_name, keys['private'])
+            # 6. Salvar o peer no banco de dados (tentativa de sincronização)
+            try:
+                self._save_peer_to_db(
+                    session,
+                    name=name,
+                    email=email,
+                    public_key=keys['public'],
+                    ip_address=peer_ip.split('/')[0],
+                    interface_id=interface.id,
+                    group_id=group_id
+                )
+            except Exception as db_exc:
+                # Não interromper a criação no MikroTik se o DB falhar — informar no retorno.
+                return {
+                    'success': False,
+                    'error': f"Peer criado no MikroTik, mas falha ao salvar no banco: {db_exc}"
+                }
 
-            # 6. Se um group_id foi fornecido, salvar essa informação no banco de dados
-            if group_id is not None:
-                self._save_peer_group_info(name, interface_name, group_id)
+            # 7. Atualizar o peer com a chave privada (etapa adicional se necessário)
+            try:
+                self._update_peer_private_key(name, interface_name, keys['private'])
+            except Exception:
+                # Não falhar o fluxo só por conta da atualização opcional da chave
+                pass
 
             return {
                 'success': True,
@@ -132,71 +153,87 @@ class WireGuardPeerService:
             }
 
         except Exception as e:
+            session.rollback()
             return {
                 'success': False,
                 'error': str(e)
             }
+        finally:
+            session.close()
 
     def _update_peer_private_key(self, peer_name, interface_name, private_key):
         """Atualiza a chave privada do peer após criação"""
-        peers = self.mikrotik_api.api.get_resource('/interface/wireguard/peers')
-        peer = peers.get(name=peer_name, interface=interface_name)
+        peers_resource = self.mikrotik_api.api.get_resource('/interface/wireguard/peers')
+        found = peers_resource.get(name=peer_name, interface=interface_name)
 
-        if not peer:
+        if not found:
             raise ValueError("Peer não encontrado para atualização")
 
-        peers.set(id=peer[0]['id'], private_key=private_key)
-        
-    def _save_peer_group_info(self, peer_name, interface_name, group_id):
-        """Salva informações do grupo do peer no banco de dados"""
-        session = self.session()
-        try:
-            # Tentar localizar o peer existente por várias chaves únicas antes de inserir
-            existing_peer = session.query(Peer).filter_by(name=peer_name).first()
+        peers_resource.set(id=found[0]['id'], private_key=private_key)
 
+    def _save_peer_to_db(self, session, name, email, public_key, ip_address, interface_id, group_id):
+        """Salva ou atualiza um peer no banco de dados.
+        Lógica:
+         - tenta encontrar por name
+         - se não encontrado, tenta obter dados do MikroTik (public-key / allowed-address)
+         - tenta encontrar por public_key
+         - tenta encontrar por ip_address
+         - se não encontrar, cria novo registro
+        """
+        try:
+            # 1) Tentar encontrar por nome
+            existing_peer = session.query(Peer).filter_by(name=name).first()
+
+            # 2) Se não encontrou por nome, tentar casar por public_key/ip vindo do MikroTik
             if not existing_peer:
                 raw_peers = self.mikrotik_api.list_wireguard_peers()
-                peer_data = next((p for p in raw_peers if p.get('name') == peer_name), None)
-                public_key = peer_data.get('public-key') if peer_data else None
-                ip_addr = (
-                    peer_data.get('allowed-address', '').split('/')[0]
-                    if peer_data and peer_data.get('allowed-address')
-                    else None
-                )
+                peer_data = next((p for p in raw_peers if p.get('name') == name), None)
 
-                # Procurar por public_key
+                # se não houver peer_data, ainda assim tentamos por public_key/ip passados
+                public_from_mk = peer_data.get('public-key') if peer_data else None
+                ip_from_mk = (peer_data.get('allowed-address', '').split('/')[0]
+                              if peer_data and peer_data.get('allowed-address') else None)
+
+                # tentar por public_key (prioridade)
                 if public_key:
                     existing_peer = session.query(Peer).filter_by(public_key=public_key).first()
 
-                # Procurar por ip_address se ainda não encontrou
-                if not existing_peer and ip_addr:
-                    existing_peer = session.query(Peer).filter_by(ip_address=ip_addr).first()
+                # tentar por public_from_mk caso public_key não tenha achado
+                if not existing_peer and public_from_mk:
+                    existing_peer = session.query(Peer).filter_by(public_key=public_from_mk).first()
 
-                # Se ainda não existir, criar novo registro com segurança
-                if not existing_peer and peer_data:
-                    new_peer = Peer(
-                        name=peer_name,
-                        email=f"{peer_name}@temp.local",  # Email temporário
-                        public_key=public_key or '',
-                        ip_address=ip_addr or '',
-                        group_id=group_id
-                    )
-                    session.add(new_peer)
-                    session.commit()
-                    session.refresh(new_peer)
-                    return
+                # tentar por ip_address
+                if not existing_peer and (ip_address or ip_from_mk):
+                    search_ip = ip_address or ip_from_mk
+                    existing_peer = session.query(Peer).filter_by(ip_address=search_ip).first()
 
-            # Atualizar grupo do peer existente (se encontrou)
+            # 3) Se existente, atualizar campos
             if existing_peer:
+                existing_peer.name = name
+                existing_peer.email = email
+                existing_peer.public_key = public_key or existing_peer.public_key
+                existing_peer.ip_address = ip_address or existing_peer.ip_address
+                existing_peer.interface_id = interface_id
                 existing_peer.group_id = group_id
-                session.commit()
+            else:
+                # 4) Criar novo registro
+                new_peer = Peer(
+                    name=name,
+                    email=email,
+                    public_key=public_key or '',
+                    ip_address=ip_address or '',
+                    interface_id=interface_id,
+                    group_id=group_id
+                )
+                session.add(new_peer)
+
+            session.commit()
         except Exception as e:
             session.rollback()
-            # Não falhar a criação do peer se houve problema ao salvar o grupo
-            print(f"Aviso: Não foi possível salvar informações do grupo: {e}")
-        finally:
-            session.close()
-        
+            # Log de aviso e repassa a exceção para o chamador decidir
+            print(f"Aviso: Não foi possível salvar o peer no banco de dados: {e}")
+            raise
+
     def list_peers(self, interface_name=None):
         """Lista todos os peers WireGuard ou filtra por interface"""
         session = self.session()
@@ -208,7 +245,7 @@ class WireGuardPeerService:
             if interface_name:
                 raw_peers = [peer for peer in raw_peers if peer.get('interface') == interface_name]
 
-            # Obter informações de grupo do banco de dados
+            # Obter informações do nosso banco de dados
             peer_names = [p.get('name') for p in raw_peers if p.get('name')]
             db_peers = {}
             if peer_names:
@@ -217,23 +254,27 @@ class WireGuardPeerService:
             # Formatar os dados de retorno
             formatted_peers = []
             for peer in raw_peers:
+                peer_name = peer.get('name', '')
+                db_peer_info = db_peers.get(peer_name)
+
                 formatted_peer = {
-                    'name': peer.get('name', ''),
+                    'name': peer_name,
                     'interface': peer.get('interface', ''),
                     'public_key': peer.get('public-key', ''),
+                    'email': db_peer_info.email if db_peer_info else None,
                     'group': {
-                        'id': db_peers.get(peer.get('name'), Peer()).group_id,
-                        'name': db_peers.get(peer.get('name'), Peer()).group.name if db_peers.get(peer.get('name')) and db_peers[peer.get('name')].group else None
-                    } if peer.get('name') in db_peers else None,
+                        'id': db_peer_info.group_id,
+                        'name': db_peer_info.group.name if db_peer_info and db_peer_info.group else None
+                    } if db_peer_info else None,
                     'private-key': peer.get('private-key', ''),
                     'allowed_address': peer.get('allowed-address', ''),
-                    'endpoint': f"{peer.get('endpoint-address', '')}:{peer.get('endpoint-port', '')}" 
+                    'endpoint': f"{peer.get('endpoint-address', '')}:{peer.get('endpoint-port', '')}"
                                if peer.get('endpoint-address') else '',
                     'last_handshake': peer.get('last-handshake', ''),
                     'rx': peer.get('rx', ''),
                     'tx': peer.get('tx', ''),
                     'persistent_keepalive': peer.get('persistent-keepalive', ''),
-                    'enabled': peer.get('disabled', 'false') == 'false'  # MikroTik usa 'disabled', invertemos para 'enabled'
+                    'enabled': peer.get('disabled', 'false') == 'false'
                 }
                 formatted_peers.append(formatted_peer)
 
@@ -252,7 +293,7 @@ class WireGuardPeerService:
             }
         finally:
             session.close()
-    
+
     def delete_peer(self, peer_name):
         """Remove um peer WireGuard pelo nome"""
         session = self.session()
@@ -260,24 +301,24 @@ class WireGuardPeerService:
             # Verificar se o peer existe
             peers = self.mikrotik_api.list_wireguard_peers()
             peer_exists = any(peer.get('name') == peer_name for peer in peers)
-            
+
             if not peer_exists:
                 raise ValueError(f"Peer {peer_name} não encontrado")
-                
+
             # Remover o peer do MikroTik
             self.mikrotik_api.delete_wireguard_peer(peer_name)
-            
+
             # Remover o peer do banco de dados se existir
             peer = session.query(Peer).filter_by(name=peer_name).first()
             if peer:
                 session.delete(peer)
                 session.commit()
-            
+
             return {
                 'success': True,
                 'message': f"Peer {peer_name} removido com sucesso"
             }
-            
+
         except Exception as e:
             session.rollback()
             return {
@@ -286,32 +327,32 @@ class WireGuardPeerService:
             }
         finally:
             session.close()
-    
+
     def toggle_peer_status(self, peer_name, enabled):
         """Ativa ou desativa um peer WireGuard"""
         try:
             peers_resource = self.mikrotik_api.api.get_resource('/interface/wireguard/peers')
             peer = peers_resource.get(name=peer_name)
-            
+
             if not peer:
                 raise ValueError(f"Peer {peer_name} não encontrado")
-            
+
             # MikroTik usa 'disabled' (true/false), então invertemos
             disabled_value = 'false' if enabled else 'true'
             peers_resource.set(id=peer[0]['id'], disabled=disabled_value)
-            
+
             return {
                 'success': True,
                 'message': f"Peer {peer_name} {'ativado' if enabled else 'desativado'} com sucesso",
                 'enabled': enabled
             }
-            
+
         except Exception as e:
             return {
                 'success': False,
                 'error': str(e)
             }
-            
+
     def update_peer_group(self, peer_name, group_id):
         """Atualiza o grupo de um peer"""
         session = self.session()
@@ -350,7 +391,7 @@ class WireGuardPeerService:
                         ip_address=ip_addr or '',
                     )
                     session.add(peer)
-            
+
             # Se group_id for None, remove o grupo atual
             if group_id is None:
                 peer.group_id = None
@@ -360,23 +401,23 @@ class WireGuardPeerService:
                 if not group:
                     raise ValueError(f"Grupo com ID {group_id} não encontrado")
                 peer.group_id = group_id
-            
+
             session.commit()
-            
+
             session.refresh(peer)
-            
+
             return {
                 'success': True,
                 'message': f"Grupo do peer {peer_name} atualizado com sucesso",
                 'peer': peer.to_dict()
             }
-            
+
         except Exception as e:
             session.rollback()
             return {
                 'success': False,
                 'error': str(e)
             }
-            
+
         finally:
             session.close()
