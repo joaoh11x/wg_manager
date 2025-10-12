@@ -3,6 +3,7 @@ from flask_cors import CORS
 
 from app.config import Config
 from app.extensions import jwt
+from app.utils.database import apply_sqlite_migrations
 
 
 def create_app():
@@ -34,6 +35,9 @@ def create_app():
     # Inicializa JWT (antes estava no main.py)
     jwt.init_app(app)
 
+    # Migrações simples de SQLite (adiciona colunas se faltarem)
+    apply_sqlite_migrations()
+
     # Registra blueprints
     from . import (
         peers,
@@ -48,6 +52,7 @@ def create_app():
         groups,
         profile,
         system,
+        me,
     )
 
     app.register_blueprint(peers.peers_bp)
@@ -62,5 +67,6 @@ def create_app():
     app.register_blueprint(groups.groups_bp)
     app.register_blueprint(profile.profile_bp)
     app.register_blueprint(system.system_bp)
+    app.register_blueprint(me.me_bp)
 
     return app

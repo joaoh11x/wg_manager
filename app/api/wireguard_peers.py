@@ -20,7 +20,8 @@ def create_peer():
     if not data or 'name' not in data or 'interface' not in data or 'email' not in data:
         return jsonify({"error": "Nome, email e interface são obrigatórios"}), 400
     
-    client_dns = data.get('client_dns', '8.8.8.8')  # DNS opcional, padrão 8.8.8.8
+    # DNS opcional; aceita tanto 'client_dns' quanto 'dns' como alias, padrão 8.8.8.8
+    client_dns = data.get('client_dns', data.get('dns', '8.8.8.8'))
     group_id = data.get('group_id')  # Grupo opcional
     
     # Validar group_id se fornecido
@@ -179,18 +180,20 @@ def get_peer_config(peer_name):
         peer = next((p for p in peers_result['peers'] if p['name'] == peer_name), None)
         if not peer:
             return jsonify({"error": "Peer não encontrado"}), 404
-            
+
         # Obter informações da interface
         interface_name = peer['interface']
         mikrotik_ip = service.mikrotik_api.get_mikrotik_ip()
         listen_port = service.mikrotik_api.get_wireguard_interface_port(interface_name)
         server_public_key = service.mikrotik_api.get_wireguard_interface_public_key(interface_name)
-        
+        # DNS do cliente (se configurado no peer), caso contrário manter 8.8.8.8 como fallback
+        client_dns = peer.get('client_dns') or '8.8.8.8'
+
         # Gerar configuração do cliente
         config = f"""[Interface]
 PrivateKey = {peer['private-key']}
 Address = {peer['allowed_address']}
-DNS = 8.8.8.8
+DNS = {client_dns}
 
 [Peer]
 PublicKey = {server_public_key}
@@ -221,18 +224,19 @@ def download_peer_config(peer_name):
         peer = next((p for p in peers_result['peers'] if p['name'] == peer_name), None)
         if not peer:
             return jsonify({"error": "Peer não encontrado"}), 404
-            
+
         # Obter informações da interface
         interface_name = peer['interface']
         mikrotik_ip = service.mikrotik_api.get_mikrotik_ip()
         listen_port = service.mikrotik_api.get_wireguard_interface_port(interface_name)
         server_public_key = service.mikrotik_api.get_wireguard_interface_public_key(interface_name)
-        
+        client_dns = peer.get('client_dns') or '8.8.8.8'
+
         # Gerar configuração do cliente
         config = f"""[Interface]
 PrivateKey = {peer['private-key']}
 Address = {peer['allowed_address']}
-DNS = 8.8.8.8
+DNS = {client_dns}
 
 [Peer]
 PublicKey = {server_public_key}
@@ -269,18 +273,19 @@ def get_peer_qrcode(peer_name):
         peer = next((p for p in peers_result['peers'] if p['name'] == peer_name), None)
         if not peer:
             return jsonify({"error": "Peer não encontrado"}), 404
-            
+
         # Obter informações da interface
         interface_name = peer['interface']
         mikrotik_ip = service.mikrotik_api.get_mikrotik_ip()
         listen_port = service.mikrotik_api.get_wireguard_interface_port(interface_name)
         server_public_key = service.mikrotik_api.get_wireguard_interface_public_key(interface_name)
-        
+        client_dns = peer.get('client_dns') or '8.8.8.8'
+
         # Gerar configuração do cliente
         config = f"""[Interface]
 PrivateKey = {peer['private-key']}
 Address = {peer['allowed_address']}
-DNS = 8.8.8.8
+DNS = {client_dns}
 
 [Peer]
 PublicKey = {server_public_key}

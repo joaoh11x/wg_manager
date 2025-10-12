@@ -33,8 +33,15 @@ def login():
         
         # Verifica se o usuário existe e a senha está correta
         if user and user.verify_password(password):
-            # Gera um token JWT
-            access_token = create_access_token(identity=username)
+            # Gera um token JWT com claims de role e limited
+            access_token = create_access_token(
+                identity=str(user.id),
+                additional_claims={
+                    "username": user.username,
+                    "role": getattr(user, 'role', 'peer'),
+                    "is_limited": getattr(user, 'is_limited', False),
+                },
+            )
             
             # Converte o avatar para base64 se existir
             avatar_base64 = None
@@ -44,9 +51,12 @@ def login():
             return jsonify({
                 "access_token": access_token,
                 "user": {
+                    "id": user.id,
                     "username": user.username,
                     "avatar": avatar_base64,
-                    "email": user.email if hasattr(user, 'email') else f"{user.username}@example.com"
+                    "email": user.email if hasattr(user, 'email') else f"{user.username}@example.com",
+                    "role": getattr(user, 'role', 'peer'),
+                    "is_limited": getattr(user, 'is_limited', False),
                 }
             }), 200
         else:

@@ -9,6 +9,9 @@ sys.path.append(str(Path(__file__).parent))
 
 from app.models.base import Base
 from app.models.user import User
+from app.models.peer import Peer 
+from app.models.group import Group
+from app.models.interface import Interface
 from app.utils.database import DatabaseConnection
 
 # Database path
@@ -31,8 +34,10 @@ def init_db():
         # Create admin user
         admin = User(
             username="admin",
-            password=User.get_password_hash("senha_segura"),
-            avatar=None
+            password="senha_segura",
+            avatar=None,
+            role='admin',
+            is_limited=False,
         )
         session.add(admin)
         session.commit()

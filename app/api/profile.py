@@ -42,14 +42,19 @@ def upload_avatar():
     if not avatar_data:
         return jsonify({"error": "Invalid image file"}), 400
     
-    # Get current user
-    current_username = get_jwt_identity()
+    # Get current user by id from JWT (identity is user.id)
+    identity = get_jwt_identity()
     db = DatabaseConnection()
     Session = sessionmaker(bind=db.engine)
     session = Session()
     
     try:
-        user = session.query(User).filter_by(username=current_username).first()
+        try:
+            user_id = int(identity)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid token identity"}), 401
+
+        user = session.query(User).filter_by(id=user_id).first()
         if not user:
             return jsonify({"error": "User not found"}), 404
             
@@ -73,13 +78,18 @@ def get_profile():
     """
     Get user profile including avatar
     """
-    current_username = get_jwt_identity()
+    identity = get_jwt_identity()
     db = DatabaseConnection()
     Session = sessionmaker(bind=db.engine)
     session = Session()
     
     try:
-        user = session.query(User).filter_by(username=current_username).first()
+        try:
+            user_id = int(identity)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid token identity"}), 401
+
+        user = session.query(User).filter_by(id=user_id).first()
         if not user:
             return jsonify({"error": "User not found"}), 404
         
@@ -106,7 +116,7 @@ def update_profile():
     Update user profile (display_name, email, etc.)
     Note: username (login) cannot be changed, only display_name
     """
-    current_username = get_jwt_identity()
+    identity = get_jwt_identity()
     data = request.get_json()
     
     if not data:
@@ -117,7 +127,12 @@ def update_profile():
     session = Session()
     
     try:
-        user = session.query(User).filter_by(username=current_username).first()
+        try:
+            user_id = int(identity)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid token identity"}), 401
+
+        user = session.query(User).filter_by(id=user_id).first()
         if not user:
             return jsonify({"error": "User not found"}), 404
         

@@ -10,6 +10,7 @@ from app.models.interface import Interface
 from app.models.group import Group
 from app.models.peer import Peer
 from sqlalchemy.orm import sessionmaker
+from app.models.user import User
 
 
 class WireGuardPeerService:
@@ -116,9 +117,10 @@ class WireGuardPeerService:
                 responder=True
             )
 
-            # 6. Salvar o peer no banco de dados (tentativa de sincronização)
+            # 6. Salvar o peer no banco de dados e criar usuário associado (tentativa de sincronização)
             try:
-                self._save_peer_to_db(
+                # Cria ou atualiza Peer
+                peer_record = self._save_peer_to_db(
                     session,
                     name=name,
                     email=email,
@@ -127,6 +129,54 @@ class WireGuardPeerService:
                     interface_id=interface.id,
                     group_id=group_id
                 )
+
+                # Criar usuário vinculado ao Peer se não existir
+                # Regras: username baseado no nome do peer; email do peer; senha randômica simples gerada
+                existing_user = None
+                if peer_record and getattr(peer_record, 'user_id', None):
+                    existing_user = session.query(User).filter_by(id=peer_record.user_id).first()
+
+                if not existing_user:
+                    base_username = name.strip().lower().replace(' ', '.')
+                    candidate = base_username or f"peer{peer_record.id if peer_record else ''}"
+                    username = candidate
+                    suffix = 1
+                    while session.query(User).filter_by(username=username).first() is not None:
+                        suffix += 1
+                        username = f"{candidate}{suffix}"
+
+                    # senha inicial
+                    import secrets
+                    import string
+                    alphabet = string.ascii_letters + string.digits
+                    raw_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+
+                    user = User(
+                        username=username,
+                        password=raw_password,
+                        email=email,
+                        display_name=name,
+                        role='peer',
+                        is_limited=True,
+                    )
+                    session.add(user)
+                    session.flush()  # obtém user.id
+
+                    # vincular
+                    if peer_record:
+                        peer_record.user_id = user.id
+                        session.add(peer_record)
+
+                    session.commit()
+                    created_user_credentials = {
+                        'username': username,
+                        'password': raw_password,
+                        'role': 'peer',
+                        'is_limited': True,
+                        'user_id': user.id,
+                    }
+                else:
+                    created_user_credentials = None
             except Exception as db_exc:
                 # Não interromper a criação no MikroTik se o DB falhar — informar no retorno.
                 return {
@@ -149,7 +199,8 @@ class WireGuardPeerService:
                 'private_key': keys['private'],
                 'public_key': keys['public'],
                 'endpoint': f"{mikrotik_ip}:{listen_port}",
-                'group_id': group_id
+                'group_id': group_id,
+                'user': created_user_credentials
             }
 
         except Exception as e:
@@ -172,14 +223,7 @@ class WireGuardPeerService:
         peers_resource.set(id=found[0]['id'], private_key=private_key)
 
     def _save_peer_to_db(self, session, name, email, public_key, ip_address, interface_id, group_id):
-        """Salva ou atualiza um peer no banco de dados.
-        Lógica:
-         - tenta encontrar por name
-         - se não encontrado, tenta obter dados do MikroTik (public-key / allowed-address)
-         - tenta encontrar por public_key
-         - tenta encontrar por ip_address
-         - se não encontrar, cria novo registro
-        """
+        
         try:
             # 1) Tentar encontrar por nome
             existing_peer = session.query(Peer).filter_by(name=name).first()
@@ -215,6 +259,8 @@ class WireGuardPeerService:
                 existing_peer.ip_address = ip_address or existing_peer.ip_address
                 existing_peer.interface_id = interface_id
                 existing_peer.group_id = group_id
+                session.add(existing_peer)
+                peer_obj = existing_peer
             else:
                 # 4) Criar novo registro
                 new_peer = Peer(
@@ -226,8 +272,10 @@ class WireGuardPeerService:
                     group_id=group_id
                 )
                 session.add(new_peer)
+                peer_obj = new_peer
 
             session.commit()
+            return peer_obj
         except Exception as e:
             session.rollback()
             # Log de aviso e repassa a exceção para o chamador decidir
@@ -268,6 +316,7 @@ class WireGuardPeerService:
                     } if db_peer_info else None,
                     'private-key': peer.get('private-key', ''),
                     'allowed_address': peer.get('allowed-address', ''),
+                    'client_dns': peer.get('client-dns', ''),
                     'endpoint': f"{peer.get('endpoint-address', '')}:{peer.get('endpoint-port', '')}"
                                if peer.get('endpoint-address') else '',
                     'last_handshake': peer.get('last-handshake', ''),
@@ -311,8 +360,20 @@ class WireGuardPeerService:
             # Remover o peer do banco de dados se existir
             peer = session.query(Peer).filter_by(name=peer_name).first()
             if peer:
-                session.delete(peer)
-                session.commit()
+                # Remover usuário vinculado, se houver
+                try:
+                    if getattr(peer, 'user_id', None):
+                        from app.models.user import User
+                        user = session.query(User).filter_by(id=peer.user_id).first()
+                        if user:
+                            session.delete(user)
+                    session.delete(peer)
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    # Tenta ao menos remover o peer se falhou a remoção do usuário
+                    session.delete(peer)
+                    session.commit()
 
             return {
                 'success': True,
