@@ -6,6 +6,8 @@ from app.utils.database import DatabaseConnection
 from app.models.user import User
 from app.models.peer import Peer
 from app.services.wireguard_peer_service import WireGuardPeerService
+import secrets
+import string
 
 
 me_bp = Blueprint('me', __name__)
@@ -257,5 +259,45 @@ PersistentKeepalive = 25"""
             download_name=f"{peer.name}.conf",
             mimetype='text/plain'
         )
+    finally:
+        session.close()
+
+
+@me_bp.route('/me/password/reset', methods=['POST'])
+@jwt_required()
+def me_password_reset():
+    """
+    Reseta a senha do usuário autenticado, gerando uma nova senha aleatória.
+    Não exige a senha antiga.
+
+    Retorna username e a nova senha em claro para o usuário salvar.
+    """
+    identity = get_jwt_identity()
+    session = _get_db_session()
+    try:
+        user = session.query(User).filter_by(id=int(identity)).first()
+        if not user:
+            return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
+
+        # Gera nova senha aleatória
+        alphabet = string.ascii_letters + string.digits
+        new_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+
+        # Atualiza senha (hash)
+        user.password = User.get_password_hash(new_password)
+        session.add(user)
+        session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Senha alterada com sucesso",
+            "credentials": {
+                "username": user.username,
+                "password": new_password
+            }
+        }), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
     finally:
         session.close()

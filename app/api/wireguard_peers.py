@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, send_file
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
+from sqlalchemy.orm import sessionmaker
 import qrcode
 import io
 import base64
@@ -9,6 +10,11 @@ import qrcode
 import io
 import base64
 from PIL import Image
+from app.utils.database import DatabaseConnection
+from app.models.peer import Peer
+from app.models.user import User
+import secrets
+import string
 
 peers_bp = Blueprint('wireguard_peers', __name__)
 
@@ -70,23 +76,7 @@ def delete_peer(peer_name):
 @peers_bp.route('/wireguard/peers/<peer_name>/group', methods=['PUT'])
 @jwt_required()
 def update_peer_group(peer_name):
-    """
-    Atualiza ou remove o grupo de um peer
     
-    Parâmetros:
-    - peer_name: Nome do peer a ser atualizado
-    
-    Corpo da requisição (JSON):
-    {
-        "group_id": 1  // ID do grupo ou null para remover do grupo atual
-    }
-    
-    Retorna:
-    - 200: Grupo atualizado com sucesso
-    - 400: Requisição inválida
-    - 404: Peer não encontrado
-    - 500: Erro interno do servidor
-    """
     data = request.get_json(silent=True) or {}
     
     if 'group_id' not in data:
@@ -321,3 +311,53 @@ PersistentKeepalive = 25"""
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@peers_bp.route('/wireguard/peers/<peer_name>/password/reset', methods=['POST'])
+@jwt_required()
+def reset_peer_password(peer_name):
+    
+    claims = get_jwt()
+    requester_id = get_jwt_identity()
+
+    db = DatabaseConnection()
+    Session = sessionmaker(bind=db.engine)
+    session = Session()
+    try:
+        peer = session.query(Peer).filter_by(name=peer_name).first()
+        if not peer:
+            return jsonify({"success": False, "error": "Peer não encontrado"}), 404
+
+        if not getattr(peer, 'user_id', None):
+            return jsonify({"success": False, "error": "Peer não possui usuário vinculado"}), 404
+
+        user = session.query(User).filter_by(id=peer.user_id).first()
+        if not user:
+            return jsonify({"success": False, "error": "Usuário vinculado não encontrado"}), 404
+
+        role = (claims or {}).get('role', 'peer')
+        is_owner = str(requester_id) == str(user.id)
+        if role != 'admin' and not is_owner:
+            return jsonify({"success": False, "error": "Acesso negado"}), 403
+
+        # Gera nova senha aleatória (mesma política utilizada na criação)
+        alphabet = string.ascii_letters + string.digits
+        new_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+
+        # Atualiza a senha com hash
+        user.password = User.get_password_hash(new_password)
+        session.add(user)
+        session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"Senha do usuário vinculado ao peer {peer_name} resetada com sucesso",
+            "credentials": {
+                "username": user.username,
+                "password": new_password
+            }
+        }), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        session.close()
