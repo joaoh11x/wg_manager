@@ -78,6 +78,32 @@ def update_interface(name):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@interfaces_bp.route("/interfaces/<string:name>/enable", methods=["POST"])
+@jwt_required()
+def enable_interface(name):
+    """
+    Rota para habilitar uma interface WireGuard.
+    """
+    service = WireGuardService()
+    try:
+        service.enable_interface(name)
+        return jsonify({"message": f"Interface '{name}' habilitada com sucesso"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@interfaces_bp.route("/interfaces/<string:name>/disable", methods=["POST"])
+@jwt_required()
+def disable_interface(name):
+    """
+    Rota para desabilitar uma interface WireGuard.
+    """
+    service = WireGuardService()
+    try:
+        service.disable_interface(name)
+        return jsonify({"message": f"Interface '{name}' desabilitada com sucesso"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @interfaces_bp.route("/interfaces/<string:name>/stats", methods=["GET"])
 @jwt_required()
 def get_interface_stats(name):

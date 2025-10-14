@@ -279,6 +279,40 @@ class MikroTikAPI:
         except Exception as e:
             raise Exception(f"Erro ao obter chave pública da interface: {str(e)}")
 
+    def enable_interface(self, name):
+        """
+        Habilita uma interface WireGuard no MikroTik.
+        """
+        try:
+            interfaces = self.api.get_resource("/interface/wireguard")
+            interface_list = interfaces.get(name=name)
+            
+            if interface_list:
+                interface = interface_list[0]
+                interfaces.set(id=interface["id"], disabled="no")
+                return True
+            else:
+                raise Exception(f"Interface '{name}' não encontrada")
+        except Exception as e:
+            raise Exception(f"Erro ao habilitar interface: {e}")
+
+    def disable_interface(self, name):
+        """
+        Desabilita uma interface WireGuard no MikroTik.
+        """
+        try:
+            interfaces = self.api.get_resource("/interface/wireguard")
+            interface_list = interfaces.get(name=name)
+            
+            if interface_list:
+                interface = interface_list[0]
+                interfaces.set(id=interface["id"], disabled="yes")
+                return True
+            else:
+                raise Exception(f"Interface '{name}' não encontrada")
+        except Exception as e:
+            raise Exception(f"Erro ao desabilitar interface: {e}")
+
     def get_system_resources(self):
         """Retorna métricas de CPU e memória do MikroTik.
 
