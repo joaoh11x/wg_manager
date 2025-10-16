@@ -84,15 +84,6 @@ class WireGuardService:
     def enable_interface(self, name):
         """
         Habilita uma interface WireGuard no MikroTik.
-        
-        Args:
-            name (str): Nome da interface a ser habilitada
-            
-        Returns:
-            bool: True se a operação for bem-sucedida
-            
-        Raises:
-            Exception: Se ocorrer um erro ao habilitar a interface
         """
         try:
             return self.mikrotik_api.enable_interface(name)
@@ -100,17 +91,8 @@ class WireGuardService:
             raise Exception(f"Erro ao habilitar interface: {str(e)}")
             
     def disable_interface(self, name):
-        """
+        """        
         Desabilita uma interface WireGuard no MikroTik.
-        
-        Args:
-            name (str): Nome da interface a ser desabilitada
-            
-        Returns:
-            bool: True se a operação for bem-sucedida
-            
-        Raises:
-            Exception: Se ocorrer um erro ao desabilitar a interface
         """
         try:
             return self.mikrotik_api.disable_interface(name)
