@@ -363,3 +363,25 @@ def reset_peer_password(peer_name):
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         session.close()
+
+
+@peers_bp.route('/wireguard/peers/<peer_name>/enable', methods=['POST'])
+@admin_required
+def enable_peer(peer_name):
+    service = WireGuardPeerService()
+    result = service.toggle_peer_status(peer_name=peer_name, enabled=True)
+    if result.get('success'):
+        return jsonify(result), 200
+    status_code = 404 if 'não encontrado' in str(result.get('error', '')).lower() else 400
+    return jsonify(result), status_code
+
+
+@peers_bp.route('/wireguard/peers/<peer_name>/disable', methods=['POST'])
+@admin_required
+def disable_peer(peer_name):
+    service = WireGuardPeerService()
+    result = service.toggle_peer_status(peer_name=peer_name, enabled=False)
+    if result.get('success'):
+        return jsonify(result), 200
+    status_code = 404 if 'não encontrado' in str(result.get('error', '')).lower() else 400
+    return jsonify(result), status_code

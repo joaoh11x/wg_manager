@@ -8,6 +8,13 @@ import {
 
 let groupsCache = [];
 let currentPeerForConfig = "";
+let allPeersCache = [];
+
+function asEnabled(value) {
+  if (value === false) return false;
+  if (value === true) return true;
+  return true;
+}
 
 function parseNumber(value) {
   const n = Number(value);
@@ -50,6 +57,7 @@ async function loadGroups() {
   if (res.status === 403) {
     groupsCache = [];
     fillGroupSelect("selPeerGroup");
+    fillGroupFilterSelect();
     return;
   }
 
@@ -57,6 +65,7 @@ async function loadGroups() {
   groupsCache = Array.isArray(data?.groups) ? data.groups : [];
 
   fillGroupSelect("selPeerGroup");
+  fillGroupFilterSelect();
 }
 
 function fillGroupSelect(selectId) {
@@ -67,6 +76,71 @@ function fillGroupSelect(selectId) {
   sel.appendChild(new Option("Sem grupo", ""));
   for (const g of groupsCache) {
     sel.appendChild(new Option(g.name, String(g.id)));
+  }
+}
+
+function fillGroupFilterSelect() {
+  const sel = document.getElementById("selFilterGroup");
+  if (!sel) return;
+
+  sel.innerHTML = "";
+  sel.appendChild(new Option("Todos os grupos", ""));
+  sel.appendChild(new Option("Sem grupo", "__none__"));
+  for (const g of groupsCache) {
+    sel.appendChild(new Option(g.name, String(g.id)));
+  }
+}
+
+function fillStatusFilterSelect() {
+  const sel = document.getElementById("selFilterStatus");
+  if (!sel) return;
+
+  sel.innerHTML = "";
+  sel.appendChild(new Option("Todos", ""));
+  sel.appendChild(new Option("Ativo", "active"));
+  sel.appendChild(new Option("Inativo", "inactive"));
+}
+
+function getFilteredPeers() {
+  const rawName = document.getElementById("txtFilterName")?.value || "";
+  const nameNeedle = rawName.trim().toLowerCase();
+
+  const groupValue = document.getElementById("selFilterGroup")?.value ?? "";
+  const statusValue = document.getElementById("selFilterStatus")?.value ?? "";
+
+  return allPeersCache.filter((p) => {
+    if (nameNeedle) {
+      const peerName = String(p?.name || "").toLowerCase();
+      if (!peerName.includes(nameNeedle)) return false;
+    }
+
+    if (groupValue) {
+      const peerGroupId = p?.group?.id;
+      if (groupValue === "__none__") {
+        if (peerGroupId !== null && peerGroupId !== undefined && String(peerGroupId) !== "") return false;
+      } else if (String(peerGroupId ?? "") !== String(groupValue)) {
+        return false;
+      }
+    }
+
+    if (statusValue) {
+      const enabled = asEnabled(p?.enabled);
+      if (statusValue === "active" && !enabled) return false;
+      if (statusValue === "inactive" && enabled) return false;
+    }
+
+    return true;
+  });
+}
+
+function applyFilters() {
+  const peers = getFilteredPeers();
+  renderPeers(peers);
+
+  const meta = document.getElementById("peersMeta");
+  if (meta) {
+    const total = allPeersCache.length;
+    meta.textContent = peers.length === total ? `${total} peer(s)` : `${peers.length} de ${total} peer(s)`;
   }
 }
 
@@ -110,15 +184,26 @@ function renderPeers(peers) {
         ? buildGroupSelectHtml(p.name, groupId)
         : (groupName ? escapeHtml(groupName) : "—");
 
+      const enabled = asEnabled(p?.enabled);
+      const statusDot = enabled
+        ? `<span class="wg-status-dot text-success" title="Ativo">●</span>`
+        : `<span class="wg-status-dot text-danger" title="Inativo">●</span>`;
+
+      const toggleBtn = enabled
+        ? `<button class="btn btn-outline-secondary btn-sm" data-action="disable" data-peer="${escapeHtml(p.name)}">Desativar</button>`
+        : `<button class="btn btn-outline-secondary btn-sm" data-action="enable" data-peer="${escapeHtml(p.name)}">Ativar</button>`;
+
       return `
         <tr>
           <td class="fw-semibold">${escapeHtml(p.name)}</td>
           <td>${escapeHtml(p.interface || "")}</td>
           <td style="min-width: 190px;">${groupCell}</td>
+          <td>${statusDot}</td>
           <td class="text-end"><span class="wg-badge">${formatBytes(parseNumber(p.rx))}</span></td>
           <td class="text-end"><span class="wg-badge">${formatBytes(parseNumber(p.tx))}</span></td>
           <td class="text-muted small">${escapeHtml(p.last_handshake || "—")}</td>
           <td class="text-end" style="white-space: nowrap;">
+            ${toggleBtn}
             <button class="btn btn-outline-secondary btn-sm" data-action="config" data-peer="${escapeHtml(p.name)}">Config</button>
             <button class="btn btn-outline-secondary btn-sm" data-action="qr" data-peer="${escapeHtml(p.name)}">QR</button>
             <button class="btn btn-outline-secondary btn-sm" data-action="reset" data-peer="${escapeHtml(p.name)}">Reset senha</button>
@@ -128,6 +213,25 @@ function renderPeers(peers) {
       `;
     })
     .join("");
+}
+
+async function setPeerEnabled(peerName, enabled) {
+  const action = enabled ? "enable" : "disable";
+  const res = await apiFetch(`/wireguard/peers/${encodeURIComponent(peerName)}/${action}`, {
+    method: "POST",
+    json: {},
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    toast(data?.error || "Falha ao alterar status", "danger");
+    return false;
+  }
+
+  allPeersCache = allPeersCache.map((p) => (p?.name === peerName ? { ...p, enabled } : p));
+  applyFilters();
+  toast(enabled ? "Peer ativado" : "Peer desativado", "success");
+  return true;
 }
 
 async function loadPeers() {
@@ -148,10 +252,8 @@ async function loadPeers() {
   }
 
   const peers = Array.isArray(data.peers) ? data.peers : [];
-  renderPeers(peers);
-
-  const meta = document.getElementById("peersMeta");
-  if (meta) meta.textContent = `${peers.length} peer(s)`;
+  allPeersCache = peers;
+  applyFilters();
 }
 
 async function createPeer(form) {
@@ -286,10 +388,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadInterfaces("selPeerInterface");
   await loadInterfaces("selFilterInterface");
   await loadGroups();
+  fillStatusFilterSelect();
   await loadPeers();
 
   document.getElementById("btnReload")?.addEventListener("click", loadPeers);
   document.getElementById("selFilterInterface")?.addEventListener("change", loadPeers);
+  document.getElementById("txtFilterName")?.addEventListener("input", applyFilters);
+  document.getElementById("selFilterGroup")?.addEventListener("change", applyFilters);
+  document.getElementById("selFilterStatus")?.addEventListener("change", applyFilters);
 
   const createForm = document.getElementById("formCreatePeer");
   createForm?.addEventListener("submit", async (e) => {
@@ -309,6 +415,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (action === "config") await showConfig(peer);
     if (action === "qr") await showQr(peer);
     if (action === "reset") await resetPassword(peer);
+    if (action === "enable") await setPeerEnabled(peer, true);
+    if (action === "disable") await setPeerEnabled(peer, false);
   });
 
   document.getElementById("tblPeers")?.addEventListener("change", async (e) => {
@@ -318,7 +426,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     const peer = sel.dataset.peer;
     const groupId = sel.value;
     const ok = await setPeerGroup(peer, groupId);
-    if (!ok) await loadPeers();
+    if (!ok) {
+      await loadPeers();
+      return;
+    }
+
+    const newGroupId = groupId === "" ? null : Number(groupId);
+    const groupObj = groupsCache.find((g) => String(g.id) === String(newGroupId)) || null;
+    allPeersCache = allPeersCache.map((p) =>
+      p?.name === peer
+        ? {
+            ...p,
+            group: groupObj ? { id: groupObj.id, name: groupObj.name } : null,
+          }
+        : p
+    );
+    applyFilters();
   });
 
   document.getElementById("btnCopyConfig")?.addEventListener("click", async () => {
