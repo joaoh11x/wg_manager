@@ -1,12 +1,13 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+
+from app.utils.authz import admin_required
 from app.services.acl_service import ACLService
 
 """ACL - Access Control List"""
 acl_bp = Blueprint('acl', __name__)
 
 @acl_bp.route('/acl/vpn-lan', methods=['POST'])
-@jwt_required()
+@admin_required
 def create_vpn_lan_rules():
     """Cria regras de forward entre VPN e LAN"""
     data = request.json
@@ -27,7 +28,7 @@ def create_vpn_lan_rules():
     return jsonify(result), status_code
 
 @acl_bp.route('/acl/forward-rules', methods=['GET'])
-@jwt_required()
+@admin_required
 def list_forward_rules():
     """Lista regras de forward"""
     service = ACLService()

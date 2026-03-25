@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, Response, stream_with_context
-from flask_jwt_extended import jwt_required
+
+from app.utils.authz import admin_required
 from app.services.system_service import SystemService
 import json
 import time
@@ -8,7 +9,7 @@ system_bp = Blueprint('system', __name__)
 service = SystemService()
 
 @system_bp.route('/system/resources', methods=['GET'])
-@jwt_required()
+@admin_required
 def get_resources():
     try:
         data = service.get_resources()
@@ -17,7 +18,7 @@ def get_resources():
         return jsonify({'error': str(e)}), 500
 
 @system_bp.route('/system/resources/stream', methods=['GET'])
-@jwt_required()
+@admin_required
 def stream_resources():
     def event_stream():
         while True:

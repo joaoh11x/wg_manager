@@ -4,9 +4,9 @@ from app.models.interface import Interface
 from sqlalchemy.orm import sessionmaker
 
 class WireGuardService:
-    def __init__(self):
-        self.mikrotik_api = MikroTikAPI()
-        self.db = DatabaseConnection()
+    def __init__(self, mikrotik_api=None, db=None):
+        self.mikrotik_api = mikrotik_api or MikroTikAPI()
+        self.db = db or DatabaseConnection()
         self.session = sessionmaker(bind=self.db.engine)
 
     def create_interface(self, name, listen_port):

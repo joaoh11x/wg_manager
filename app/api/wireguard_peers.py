@@ -16,10 +16,12 @@ from app.models.user import User
 import secrets
 import string
 
+from app.utils.authz import admin_required
+
 peers_bp = Blueprint('wireguard_peers', __name__)
 
 @peers_bp.route('/wireguard/peers', methods=['POST'])
-@jwt_required()
+@admin_required
 def create_peer():
     data = request.json
     
@@ -53,7 +55,7 @@ def create_peer():
         return jsonify({"error": result['error']}), 400
 
 @peers_bp.route('/wireguard/peers', methods=['GET'])
-@jwt_required()
+@admin_required
 def list_peers():
     interface = request.args.get('interface')
     service = WireGuardPeerService()
@@ -64,7 +66,7 @@ def list_peers():
         return jsonify({"error": str(e)}), 500
 
 @peers_bp.route('/wireguard/peers/<peer_name>', methods=['DELETE'])
-@jwt_required()
+@admin_required
 def delete_peer(peer_name):
     service = WireGuardPeerService()
     try:
@@ -74,7 +76,7 @@ def delete_peer(peer_name):
         return jsonify({"error": str(e)}), 400
 
 @peers_bp.route('/wireguard/peers/<peer_name>/group', methods=['PUT'])
-@jwt_required()
+@admin_required
 def update_peer_group(peer_name):
     
     data = request.get_json(silent=True) or {}
@@ -118,7 +120,7 @@ def update_peer_group(peer_name):
         }), 500
     
 @peers_bp.route('/wireguard/peers/stats', methods=['GET'])
-@jwt_required()
+@admin_required
 def get_peers_stats():
     interface = request.args.get('interface')
     service = WireGuardPeerService()
@@ -157,7 +159,7 @@ def get_peers_stats():
         }), 500
 
 @peers_bp.route('/wireguard/peers/<peer_name>/config', methods=['GET'])
-@jwt_required()
+@admin_required
 def get_peer_config(peer_name):
     """Obtém a configuração do cliente para um peer específico"""
     service = WireGuardPeerService()
@@ -201,7 +203,7 @@ PersistentKeepalive = 25"""
         return jsonify({"error": str(e)}), 500
 
 @peers_bp.route('/wireguard/peers/<peer_name>/config/download', methods=['GET'])
-@jwt_required()
+@admin_required
 def download_peer_config(peer_name):
     """Download da configuração do cliente como arquivo .conf"""
     service = WireGuardPeerService()
@@ -250,7 +252,7 @@ PersistentKeepalive = 25"""
         return jsonify({"error": str(e)}), 500
 
 @peers_bp.route('/wireguard/peers/<peer_name>/qrcode', methods=['GET'])
-@jwt_required()
+@admin_required
 def get_peer_qrcode(peer_name):
     """Gera QR Code da configuração do peer"""
     service = WireGuardPeerService()
