@@ -55,7 +55,14 @@
         <select class="form-select form-select-sm" id="selFilterStatus" style="min-width: 180px;"></select>
         <button class="btn btn-outline-secondary btn-sm" type="button" id="btnReload">Recarregar</button>
       </div>
-      <div class="text-muted small" id="peersMeta">—</div>
+      <div class="d-flex align-items-center gap-2">
+        <div class="text-muted small" id="peersMeta">—</div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Paginação">
+          <button class="btn btn-outline-secondary" type="button" id="btnPrevPage">Anterior</button>
+          <button class="btn btn-outline-secondary" type="button" id="btnNextPage">Próxima</button>
+        </div>
+        <div class="text-muted small" id="peersPage">—</div>
+      </div>
     </div>
 
     <div class="table-responsive">

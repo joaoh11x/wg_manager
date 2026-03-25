@@ -9,6 +9,9 @@ import {
 let groupsCache = [];
 let currentPeerForConfig = "";
 let allPeersCache = [];
+const PAGE_SIZE = 10;
+let currentPage = 1;
+let currentTotalPages = 1;
 
 function asEnabled(value) {
   if (value === false) return false;
@@ -134,14 +137,39 @@ function getFilteredPeers() {
 }
 
 function applyFilters() {
-  const peers = getFilteredPeers();
-  renderPeers(peers);
+  const filtered = getFilteredPeers();
+  const total = allPeersCache.length;
+  const filteredCount = filtered.length;
+
+  currentTotalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
+  if (currentPage > currentTotalPages) currentPage = currentTotalPages;
+  if (currentPage < 1) currentPage = 1;
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, filteredCount);
+  const pageItems = filtered.slice(start, end);
+
+  renderPeers(pageItems);
 
   const meta = document.getElementById("peersMeta");
   if (meta) {
-    const total = allPeersCache.length;
-    meta.textContent = peers.length === total ? `${total} peer(s)` : `${peers.length} de ${total} peer(s)`;
+    meta.textContent = filteredCount === total ? `${filteredCount} peer(s)` : `${filteredCount} de ${total} peer(s)`;
   }
+
+  const pageLbl = document.getElementById("peersPage");
+  if (pageLbl) {
+    pageLbl.textContent = `Página ${currentPage}/${currentTotalPages}`;
+  }
+
+  const btnPrev = document.getElementById("btnPrevPage");
+  const btnNext = document.getElementById("btnNextPage");
+  if (btnPrev) btnPrev.disabled = currentPage <= 1;
+  if (btnNext) btnNext.disabled = currentPage >= currentTotalPages;
+}
+
+function resetToFirstPageAndApply() {
+  currentPage = 1;
+  applyFilters();
 }
 
 function buildGroupSelectHtml(peerName, currentGroupId) {
@@ -198,7 +226,7 @@ function renderPeers(peers) {
           <td class="fw-semibold">${escapeHtml(p.name)}</td>
           <td>${escapeHtml(p.interface || "")}</td>
           <td style="min-width: 190px;">${groupCell}</td>
-          <td>${statusDot}</td>
+          <td class="wg-status-cell">${statusDot}</td>
           <td class="text-end"><span class="wg-badge">${formatBytes(parseNumber(p.rx))}</span></td>
           <td class="text-end"><span class="wg-badge">${formatBytes(parseNumber(p.tx))}</span></td>
           <td class="text-muted small">${escapeHtml(p.last_handshake || "—")}</td>
@@ -253,6 +281,7 @@ async function loadPeers() {
 
   const peers = Array.isArray(data.peers) ? data.peers : [];
   allPeersCache = peers;
+  currentPage = 1;
   applyFilters();
 }
 
@@ -393,9 +422,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("btnReload")?.addEventListener("click", loadPeers);
   document.getElementById("selFilterInterface")?.addEventListener("change", loadPeers);
-  document.getElementById("txtFilterName")?.addEventListener("input", applyFilters);
-  document.getElementById("selFilterGroup")?.addEventListener("change", applyFilters);
-  document.getElementById("selFilterStatus")?.addEventListener("change", applyFilters);
+  document.getElementById("txtFilterName")?.addEventListener("input", resetToFirstPageAndApply);
+  document.getElementById("selFilterGroup")?.addEventListener("change", resetToFirstPageAndApply);
+  document.getElementById("selFilterStatus")?.addEventListener("change", resetToFirstPageAndApply);
+
+  document.getElementById("btnPrevPage")?.addEventListener("click", () => {
+    if (currentPage > 1) {
+      currentPage -= 1;
+      applyFilters();
+    }
+  });
+  document.getElementById("btnNextPage")?.addEventListener("click", () => {
+    if (currentPage < currentTotalPages) {
+      currentPage += 1;
+      applyFilters();
+    }
+  });
 
   const createForm = document.getElementById("formCreatePeer");
   createForm?.addEventListener("submit", async (e) => {
