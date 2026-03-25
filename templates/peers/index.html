@@ -1,0 +1,125 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Peers | WG Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-1">Gerenciamento de peers</h1>
+    <div class="text-muted">Crie, remova e visualize configurações</div>
+  </div>
+  <button class="btn btn-dark btn-sm" data-bs-toggle="collapse" data-bs-target="#cardCreatePeer" type="button">
+    Novo peer
+  </button>
+</div>
+
+<div class="collapse" id="cardCreatePeer">
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <form class="row g-2" id="formCreatePeer">
+        <div class="col-12 col-md-4">
+          <label class="form-label">Nome</label>
+          <input class="form-control" name="name" placeholder="ex: joao" required />
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Email</label>
+          <input class="form-control" name="email" type="email" placeholder="joao@empresa.com" required />
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Interface</label>
+          <select class="form-select" name="interface" id="selPeerInterface" required></select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">DNS (opcional)</label>
+          <input class="form-control" name="client_dns" placeholder="8.8.8.8" />
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Grupo (opcional)</label>
+          <select class="form-select" name="group_id" id="selPeerGroup"></select>
+        </div>
+        <div class="col-12 col-md-4 d-flex align-items-end">
+          <button class="btn btn-dark w-100" type="submit">Criar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+      <div class="d-flex align-items-center gap-2">
+        <input class="form-control form-control-sm" id="txtFilterName" placeholder="Filtrar por nome…" style="min-width: 220px;" />
+        <select class="form-select form-select-sm" id="selFilterInterface" style="min-width: 220px;"></select>
+        <select class="form-select form-select-sm" id="selFilterGroup" style="min-width: 220px;"></select>
+        <select class="form-select form-select-sm" id="selFilterStatus" style="min-width: 180px;"></select>
+        <button class="btn btn-outline-secondary btn-sm" type="button" id="btnReload">Recarregar</button>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <div class="text-muted small" id="peersMeta">—</div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Paginação">
+          <button class="btn btn-outline-secondary" type="button" id="btnPrevPage">Anterior</button>
+          <button class="btn btn-outline-secondary" type="button" id="btnNextPage">Próxima</button>
+        </div>
+        <div class="text-muted small" id="peersPage">—</div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Peer</th>
+            <th>Interface</th>
+            <th>Grupo</th>
+            <th>Status</th>
+            <th class="text-end">RX</th>
+            <th class="text-end">TX</th>
+            <th>Handshake</th>
+            <th class="text-end">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tblPeers"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Config -->
+<div class="modal fade" id="modalConfig" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalConfigTitle">Config</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <textarea class="form-control font-monospace" id="txtConfig" rows="14" readonly></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" id="btnCopyConfig">Copiar</button>
+        <button class="btn btn-dark" type="button" id="btnDownloadConfig">Baixar .conf</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: QR Code -->
+<div class="modal fade" id="modalQr" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalQrTitle">QR Code</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img id="imgQr" alt="QR" class="img-fluid rounded border" />
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/pages/peers.js') }}"></script>
+{% endblock %}

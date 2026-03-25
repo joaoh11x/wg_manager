@@ -1,12 +1,13 @@
 from flask import Blueprint, request, jsonify
 from app.services.wireguard_service import WireGuardService
-from flask_jwt_extended import jwt_required
+
+from app.utils.authz import admin_required
 
 # Cria um Blueprint para as rotas de interfaces
 interfaces_bp = Blueprint("interfaces", __name__)
 
 @interfaces_bp.route("/interfaces", methods=["POST"])
-@jwt_required()
+@admin_required
 def create_interface():
     """
     Rota para criar uma nova interface WireGuard.
@@ -30,7 +31,7 @@ def create_interface():
 
 
 @interfaces_bp.route("/interfaces/<string:name>", methods=["DELETE"])
-@jwt_required()
+@admin_required
 def delete_interface(name):
     """
     Rota para deletar uma interface WireGuard.
@@ -43,7 +44,7 @@ def delete_interface(name):
         return jsonify({"error": str(e)}), 500
     
 @interfaces_bp.route("/interfaces", methods=["GET"])
-@jwt_required()
+@admin_required
 def list_interfaces():
     """
     Rota para listar todas as interfaces WireGuard.
@@ -56,7 +57,7 @@ def list_interfaces():
         return jsonify({"error": str(e)}), 500
     
 @interfaces_bp.route("/interfaces/<string:name>", methods=["PUT"])
-@jwt_required()
+@admin_required
 def update_interface(name):
     """
     Rota para atualizar uma interface WireGuard.
@@ -79,7 +80,7 @@ def update_interface(name):
         return jsonify({"error": str(e)}), 500
 
 @interfaces_bp.route("/interfaces/<string:name>/enable", methods=["POST"])
-@jwt_required()
+@admin_required
 def enable_interface(name):
     """
     Rota para habilitar uma interface WireGuard.
@@ -92,7 +93,7 @@ def enable_interface(name):
         return jsonify({"error": str(e)}), 500
 
 @interfaces_bp.route("/interfaces/<string:name>/disable", methods=["POST"])
-@jwt_required()
+@admin_required
 def disable_interface(name):
     """
     Rota para desabilitar uma interface WireGuard.
@@ -105,7 +106,7 @@ def disable_interface(name):
         return jsonify({"error": str(e)}), 500
 
 @interfaces_bp.route("/interfaces/<string:name>/stats", methods=["GET"])
-@jwt_required()
+@admin_required
 def get_interface_stats(name):
     """
     Rota para obter estatísticas da interface WireGuard.

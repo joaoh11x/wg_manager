@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+
+from app.utils.authz import admin_required
 from app.services.config_service import ConfigService
 
 ip_bp = Blueprint("ip_addresses", __name__)
 
 @ip_bp.route("/ips", methods=["POST"])
-@jwt_required()
+@admin_required
 def add_ip():
     """Adiciona um IP a uma interface"""
     data = request.json
@@ -22,7 +23,7 @@ def add_ip():
     return jsonify(result), 201 if result["success"] else 400
 
 @ip_bp.route("/ips", methods=["GET"])
-@jwt_required()
+@admin_required
 def list_ips():
     """Lista todos os IPs configurados"""
     service = ConfigService()
@@ -30,7 +31,7 @@ def list_ips():
     return jsonify(result), 200 if result["success"] else 500
 
 @ip_bp.route("/ips/<string:ip_id>", methods=["DELETE"])
-@jwt_required()
+@admin_required
 def remove_ip(ip_id):
     """Remove um IP pelo ID"""
     service = ConfigService()

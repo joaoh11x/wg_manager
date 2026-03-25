@@ -1,5 +1,7 @@
 import os
 import sys
+import secrets
+from getpass import getpass
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
@@ -32,9 +34,24 @@ def init_db():
     
     try:
         # Create admin user
+        env_password = os.getenv("ADMIN_PASSWORD")
+        if env_password:
+            admin_password = env_password
+        else:
+            pw1 = getpass("Enter admin password (leave blank to auto-generate): ")
+            if not pw1:
+                admin_password = secrets.token_urlsafe(18)
+                print("⚠️  Generated admin password (save it now):")
+                print(admin_password)
+            else:
+                pw2 = getpass("Confirm admin password: ")
+                if pw1 != pw2:
+                    raise ValueError("Passwords do not match")
+                admin_password = pw1
+
         admin = User(
             username="admin",
-            password="senha_segura",
+            password=admin_password,
             avatar=None,
             role='admin',
             is_limited=False,
@@ -43,7 +60,8 @@ def init_db():
         session.commit()
         print("✅ Database initialized successfully!")
         print(f"👤 Admin user created with username: admin")
-        print(f"🔑 Password: senha_segura")
+        if env_password:
+            print("🔑 Admin password set via ADMIN_PASSWORD env var")
         
     except Exception as e:
         session.rollback()

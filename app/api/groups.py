@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+
+from app.utils.authz import admin_required
 from app.services.group_service import GroupService
 
 groups_bp = Blueprint('groups', __name__)
 
 @groups_bp.route('/groups', methods=['POST'])
-@jwt_required()
+@admin_required
 def create_group():
     """Cria um novo grupo"""
     data = request.json
@@ -37,7 +38,7 @@ def create_group():
         return jsonify({"error": result['error']}), 400
 
 @groups_bp.route('/groups', methods=['GET'])
-@jwt_required()
+@admin_required
 def list_groups():
     """Lista todos os grupos"""
     service = GroupService()
@@ -49,7 +50,7 @@ def list_groups():
         return jsonify({"error": result['error']}), 500
 
 @groups_bp.route('/groups/<int:group_id>', methods=['GET'])
-@jwt_required()
+@admin_required
 def get_group(group_id):
     """Obtém detalhes de um grupo específico"""
     service = GroupService()
@@ -61,7 +62,7 @@ def get_group(group_id):
         return jsonify({"error": result['error']}), 404
 
 @groups_bp.route('/groups/<int:group_id>', methods=['PUT'])
-@jwt_required()
+@admin_required
 def update_group(group_id):
     """Atualiza um grupo existente"""
     data = request.json
@@ -93,7 +94,7 @@ def update_group(group_id):
         return jsonify({"error": result['error']}), 400
 
 @groups_bp.route('/groups/<int:group_id>', methods=['DELETE'])
-@jwt_required()
+@admin_required
 def delete_group(group_id):
     """Remove um grupo"""
     service = GroupService()
@@ -105,7 +106,7 @@ def delete_group(group_id):
         return jsonify({"error": result['error']}), 400
 
 @groups_bp.route('/groups/<int:group_id>/peers', methods=['GET'])
-@jwt_required()
+@admin_required
 def get_group_peers(group_id):
     """Lista todos os peers de um grupo"""
     service = GroupService()
@@ -117,7 +118,7 @@ def get_group_peers(group_id):
         return jsonify({"error": result['error']}), 500
 
 @groups_bp.route('/peers/<int:peer_id>/group', methods=['PUT'])
-@jwt_required()
+@admin_required
 def assign_peer_to_group(peer_id):
     """Vincula um peer a um grupo ou remove a vinculação"""
     data = request.json
@@ -137,7 +138,7 @@ def assign_peer_to_group(peer_id):
         return jsonify({"error": result['error']}), 400
 
 @groups_bp.route('/peers/<int:peer_id>/group', methods=['DELETE'])
-@jwt_required()
+@admin_required
 def remove_peer_from_group(peer_id):
     """Remove um peer do grupo atual"""
     service = GroupService()

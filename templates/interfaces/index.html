@@ -1,0 +1,132 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Interfaces | WG Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-1">Configuração da interface WireGuard</h1>
+    <div class="text-muted">Crie, edite e habilite/desabilite interfaces</div>
+  </div>
+  <button class="btn btn-dark btn-sm" type="button" id="btnNewWizard">Nova interface</button>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <h2 class="h6 mb-0">Interfaces</h2>
+      <button class="btn btn-outline-secondary btn-sm" type="button" id="btnReload">Recarregar</button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Listen port</th>
+            <th>Status</th>
+            <th class="text-end">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tblInterfaces"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Wizard (Create/Edit + IP + NAT + Firewall) -->
+<div class="modal fade" id="modalInterfaceWizard" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="wizardTitle">Nova interface</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2" id="wizardStepLabel">Etapa 1 de 4</div>
+
+        <!-- Step 1 -->
+        <form class="row g-2" id="wizardStep1" data-step="1">
+          <input type="hidden" name="mode" value="create" />
+          <input type="hidden" name="old_name" />
+          <div class="col-12 col-md-7">
+            <label class="form-label">Nome da interface</label>
+            <input class="form-control" name="name" placeholder="ex: wg0" required />
+          </div>
+          <div class="col-12 col-md-5">
+            <label class="form-label">Porta de escuta</label>
+            <input class="form-control" name="listen_port" type="number" min="1" max="65535" placeholder="13231" required />
+          </div>
+        </form>
+
+        <!-- Step 2 -->
+        <form class="row g-2 d-none" id="wizardStep2" data-step="2">
+          <div class="col-12">
+            <label class="form-label">Endereço IP / máscara</label>
+            <div class="input-group">
+              <input class="form-control" name="ip" placeholder="ex: 192.168.101.1" required />
+              <span class="input-group-text">/</span>
+              <input class="form-control" name="mask" type="number" min="0" max="32" placeholder="24" required />
+            </div>
+          </div>
+          <div class="col-12 col-md-7">
+            <label class="form-label">Interface</label>
+            <select class="form-select" name="interface" required></select>
+          </div>
+          <div class="col-12 col-md-5">
+            <label class="form-label">Comentário (opcional)</label>
+            <input class="form-control" name="comment" placeholder="ex: WireGuard" />
+          </div>
+        </form>
+
+        <!-- Step 3 -->
+        <form class="row g-2 d-none" id="wizardStep3" data-step="3">
+          <div class="col-12">
+            <label class="form-label">Rede de origem / máscara</label>
+            <div class="input-group">
+              <input class="form-control" name="src_net" placeholder="ex: 192.168.0.0" required />
+              <span class="input-group-text">/</span>
+              <input class="form-control" name="mask" type="number" min="0" max="32" placeholder="24" required />
+            </div>
+          </div>
+        </form>
+
+        <!-- Step 4 -->
+        <form class="row g-2 d-none" id="wizardStep4" data-step="4">
+          <div class="col-12 col-md-6">
+            <label class="form-label">Porta do WireGuard</label>
+            <select class="form-select" name="port" required></select>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">Rede WireGuard (CIDR)</label>
+            <select class="form-select" name="network" required></select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" id="btnWizardBack">Voltar</button>
+        <button class="btn btn-dark" type="button" id="btnWizardNext">Próximo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Stats -->
+<div class="modal fade" id="modalStats" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalStatsTitle">Stats</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <pre class="mb-0" id="preStats"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/pages/interfaces.js') }}"></script>
+{% endblock %}

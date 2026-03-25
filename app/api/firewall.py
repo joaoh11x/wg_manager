@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+
+from app.utils.authz import admin_required
 from app.services.firewall_service import FirewallService
 
 firewall_bp = Blueprint('firewall', __name__)
 
 @firewall_bp.route('/firewall/wireguard', methods=['POST'])
-@jwt_required()
+@admin_required
 def create_wireguard_rules():
     """Cria regras para tráfego WireGuard"""
     data = request.json
@@ -24,7 +25,7 @@ def create_wireguard_rules():
     return jsonify(result), status_code
 
 @firewall_bp.route('/firewall/rules', methods=['GET'])
-@jwt_required()
+@admin_required
 def list_firewall_rules():
     """Lista todas as regras de firewall"""
     service = FirewallService()
@@ -33,7 +34,7 @@ def list_firewall_rules():
     return jsonify(result), status_code
 
 @firewall_bp.route('/firewall/rules/<string:rule_id>', methods=['DELETE'])
-@jwt_required()
+@admin_required
 def delete_firewall_rule(rule_id):
     """Remove uma regra de firewall"""
     service = FirewallService()

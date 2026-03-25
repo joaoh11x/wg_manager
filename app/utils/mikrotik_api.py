@@ -11,12 +11,26 @@ class MikroTikAPI:
         user = os.getenv("MIKROTIK_USER")
         password = os.getenv("MIKROTIK_PASS")
 
+        if not host or not user or not password:
+            raise RuntimeError(
+                "Missing MikroTik credentials. Set MIKROTIK_HOST, MIKROTIK_USER and MIKROTIK_PASS."
+            )
+
+        env = (os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or "").lower()
+        is_production = env in {"prod", "production"}
+
+        plaintext_env = os.getenv("MIKROTIK_PLAINTEXT_LOGIN")
+        if plaintext_env is None:
+            plaintext_login = not is_production
+        else:
+            plaintext_login = plaintext_env.strip().lower() in {"1", "true", "yes", "on"}
+
         try:
             self.connection = RouterOsApiPool(
                 host=host,
                 username=user,
                 password=password,
-                plaintext_login=True  # Ajustar para False se usar TLS
+                plaintext_login=plaintext_login,
             )
             self.api = self.connection.get_api()
         except Exception as e:

@@ -1,0 +1,12 @@
+Flask
+flask-cors
+flask-jwt-extended
+SQLAlchemy
+python-dotenv
+passlib[bcrypt]
+bcrypt
+cryptography
+Pillow
+qrcode
+routeros-api
+pytest
