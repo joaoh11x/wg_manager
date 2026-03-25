@@ -1,0 +1,104 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Interfaces | WG Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-1">Configuração da interface WireGuard</h1>
+    <div class="text-muted">Crie, edite e habilite/desabilite interfaces</div>
+  </div>
+  <button class="btn btn-dark btn-sm" data-bs-toggle="collapse" data-bs-target="#cardCreateInterface" type="button">Nova interface</button>
+</div>
+
+<div class="collapse" id="cardCreateInterface">
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <form class="row g-2" id="formCreateInterface">
+        <div class="col-12 col-md-5">
+          <label class="form-label">Nome</label>
+          <input class="form-control" name="name" placeholder="ex: wg0" required />
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label">Listen port</label>
+          <input class="form-control" name="listen_port" type="number" min="1" max="65535" placeholder="13231" required />
+        </div>
+        <div class="col-12 col-md-2 d-flex align-items-end">
+          <button class="btn btn-dark w-100" type="submit">Criar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <h2 class="h6 mb-0">Interfaces</h2>
+      <button class="btn btn-outline-secondary btn-sm" type="button" id="btnReload">Recarregar</button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Listen port</th>
+            <th>Status</th>
+            <th class="text-end">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tblInterfaces"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit interface -->
+<div class="modal fade" id="modalEditInterface" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar interface</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form class="row g-2" id="formEditInterface">
+          <input type="hidden" name="old_name" />
+          <div class="col-12">
+            <label class="form-label">Nome</label>
+            <input class="form-control" name="name" required />
+          </div>
+          <div class="col-12">
+            <label class="form-label">Listen port</label>
+            <input class="form-control" name="listen_port" type="number" min="1" max="65535" required />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-dark" type="button" id="btnSaveInterface">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Stats -->
+<div class="modal fade" id="modalStats" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalStatsTitle">Stats</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <pre class="mb-0" id="preStats"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/pages/interfaces.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Dashboard | WG Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-1">Dashboard</h1>
+    <div class="text-muted">Visão geral de tráfego, peers e interfaces</div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <select class="form-select form-select-sm" id="selInterface" style="min-width: 220px;"></select>
+    <button class="btn btn-dark btn-sm" id="btnRefresh" type="button">Atualizar</button>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small">Peers</div>
+        <div class="display-6" id="kpiPeers">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small">Ativos (handshake)</div>
+        <div class="display-6" id="kpiActive">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small">RX total</div>
+        <div class="display-6" id="kpiRx">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small">TX total</div>
+        <div class="display-6" id="kpiTx">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h2 class="h6 mb-0">Top peers por tráfego</h2>
+          <div class="text-muted small" id="chartHint">—</div>
+        </div>
+        <canvas id="chartTraffic" height="140"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h2 class="h6 mb-0">Peers (última atualização)</h2>
+          <div class="text-muted small" id="lastUpdate">—</div>
+        </div>
+        <div class="table-responsive" style="max-height: 360px;">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Peer</th>
+                <th class="text-end">RX</th>
+                <th class="text-end">TX</th>
+              </tr>
+            </thead>
+            <tbody id="tblPeers"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script type="module" src="{{ url_for('static', filename='js/pages/dashboard.js') }}"></script>
+{% endblock %}

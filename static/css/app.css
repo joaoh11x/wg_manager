@@ -1,0 +1,35 @@
+:root {
+  color-scheme: light;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.card {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.table thead th {
+  font-size: 0.825rem;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.display-6 {
+  font-weight: 650;
+}
+
+.font-monospace {
+  font-size: 0.9rem;
+}
+
+pre {
+  background: rgba(0, 0, 0, 0.03);
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.wg-badge {
+  font-variant-numeric: tabular-nums;
+}

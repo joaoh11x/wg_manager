@@ -1,0 +1,116 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Grupos | WG Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-1">Gerenciamento de grupos</h1>
+    <div class="text-muted">Organize peers por grupo</div>
+  </div>
+  <button class="btn btn-dark btn-sm" data-bs-toggle="collapse" data-bs-target="#cardCreateGroup" type="button">Novo grupo</button>
+</div>
+
+<div class="collapse" id="cardCreateGroup">
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <form class="row g-2" id="formCreateGroup">
+        <div class="col-12 col-md-4">
+          <label class="form-label">Nome</label>
+          <input class="form-control" name="name" placeholder="ex: time-dev" required />
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Descrição (opcional)</label>
+          <input class="form-control" name="description" placeholder="ex: Acesso VPN para Dev" />
+        </div>
+        <div class="col-12 col-md-2 d-flex align-items-end">
+          <button class="btn btn-dark w-100" type="submit">Criar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h2 class="h6 mb-0">Grupos</h2>
+          <button class="btn btn-outline-secondary btn-sm" type="button" id="btnReloadGroups">Recarregar</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Descrição</th>
+                <th class="text-end">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tblGroups"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div>
+            <h2 class="h6 mb-0">Peers do grupo</h2>
+            <div class="text-muted small" id="groupPeersMeta">Selecione um grupo</div>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" id="btnReloadGroupPeers" disabled>Recarregar</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Peer</th>
+                <th>Email</th>
+              </tr>
+            </thead>
+            <tbody id="tblGroupPeers"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit group -->
+<div class="modal fade" id="modalEditGroup" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar grupo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form class="row g-2" id="formEditGroup">
+          <input type="hidden" name="group_id" />
+          <div class="col-12">
+            <label class="form-label">Nome</label>
+            <input class="form-control" name="name" required />
+          </div>
+          <div class="col-12">
+            <label class="form-label">Descrição</label>
+            <input class="form-control" name="description" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-dark" type="button" id="btnSaveGroup">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/pages/groups.js') }}"></script>
+{% endblock %}
