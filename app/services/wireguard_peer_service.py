@@ -117,7 +117,7 @@ class WireGuardPeerService:
                 responder=True
             )
 
-            # 6. Salvar o peer no banco de dados e criar usuário associado (tentativa de sincronização)
+            # 6. Salvar o peer no banco de dados e criar/vincular usuário associado
             try:
                 # Cria ou atualiza Peer
                 peer_record = self._save_peer_to_db(
@@ -130,13 +130,32 @@ class WireGuardPeerService:
                     group_id=group_id
                 )
 
-                # Criar usuário vinculado ao Peer se não existir
-                # Regras: username baseado no nome do peer; email do peer; senha randômica simples gerada
-                existing_user = None
-                if peer_record and getattr(peer_record, 'user_id', None):
-                    existing_user = session.query(User).filter_by(id=peer_record.user_id).first()
+                created_user_credentials = None
 
-                if not existing_user:
+                # 6.1) Se já houver user_id no Peer, tentar carregar
+                linked_user = None
+                if peer_record and getattr(peer_record, 'user_id', None):
+                    linked_user = session.query(User).filter_by(id=peer_record.user_id).first()
+
+                # 6.2) Se não houver usuário vinculado, tentar reutilizar usuário por email
+                if not linked_user:
+                    existing_by_email = session.query(User).filter_by(email=email).first()
+                    if existing_by_email:
+                        # Garante relação 1:1 (Peer.user_id é unique)
+                        existing_link = session.query(Peer).filter_by(user_id=existing_by_email.id).first()
+                        if existing_link and peer_record and existing_link.id != peer_record.id:
+                            raise ValueError(
+                                "Já existe um usuário com este email vinculado a outro peer"
+                            )
+                        if peer_record:
+                            peer_record.user_id = existing_by_email.id
+                            session.add(peer_record)
+                            session.commit()
+                        linked_user = existing_by_email
+
+                # 6.3) Se ainda não houver usuário, criar um novo
+                if not linked_user:
+                    # Regras: username baseado no nome do peer; email do peer; senha randômica simples gerada
                     base_username = name.strip().lower().replace(' ', '.')
                     candidate = base_username or f"peer{peer_record.id if peer_record else ''}"
                     username = candidate
@@ -145,9 +164,9 @@ class WireGuardPeerService:
                         suffix += 1
                         username = f"{candidate}{suffix}"
 
-                    # senha inicial
                     import secrets
                     import string
+
                     alphabet = string.ascii_letters + string.digits
                     raw_password = ''.join(secrets.choice(alphabet) for _ in range(10))
 
@@ -162,12 +181,12 @@ class WireGuardPeerService:
                     session.add(user)
                     session.flush()  # obtém user.id
 
-                    # vincular
                     if peer_record:
                         peer_record.user_id = user.id
                         session.add(peer_record)
 
                     session.commit()
+                    linked_user = user
                     created_user_credentials = {
                         'username': username,
                         'password': raw_password,
@@ -175,8 +194,6 @@ class WireGuardPeerService:
                         'is_limited': True,
                         'user_id': user.id,
                     }
-                else:
-                    created_user_credentials = None
             except Exception as db_exc:
                 # Não interromper a criação no MikroTik se o DB falhar — informar no retorno.
                 return {

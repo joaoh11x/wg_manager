@@ -1,4 +1,4 @@
-import { apiFetch, setToken, toast } from "../app.js";
+import { apiFetch, decodeJwt, setToken, toast } from "../app.js";
 
 function setLoading(isLoading) {
   const btn = document.getElementById("btnLogin");
@@ -42,7 +42,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       setToken(data.access_token);
       toast("Login realizado", "success");
-      location.href = "/ui/dashboard";
+      const payload = decodeJwt(data.access_token);
+      const role = payload?.role || data?.user?.role || "peer";
+      location.href = role === "peer" ? "/ui/me" : "/ui/dashboard";
     } finally {
       setLoading(false);
     }

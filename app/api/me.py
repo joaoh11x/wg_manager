@@ -1,5 +1,6 @@
-from flask import Blueprint, jsonify, send_file
+from flask import Blueprint, jsonify, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended import create_access_token
 from sqlalchemy.orm import sessionmaker
 
 from app.utils.database import DatabaseConnection
@@ -285,6 +286,7 @@ def me_password_reset():
 
         # Atualiza senha (hash)
         user.password = User.get_password_hash(new_password)
+        user.must_change_password = True
         session.add(user)
         session.commit()
 
@@ -295,6 +297,61 @@ def me_password_reset():
                 "username": user.username,
                 "password": new_password
             }
+        }), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        session.close()
+
+
+@me_bp.route('/me/password/change', methods=['POST'])
+@jwt_required()
+def me_password_change():
+    """Troca a senha do usuário autenticado.
+
+    Usado pelo modal obrigatório quando `must_change_password` está ativo.
+    """
+    identity = get_jwt_identity()
+    payload = request.get_json(silent=True) or {}
+    new_password = payload.get('new_password')
+    confirm_password = payload.get('confirm_password')
+
+    if not new_password or not confirm_password:
+        return jsonify({"success": False, "error": "Nova senha e confirmação são obrigatórias"}), 400
+
+    if new_password != confirm_password:
+        return jsonify({"success": False, "error": "As senhas não conferem"}), 400
+
+    if len(str(new_password)) < 8:
+        return jsonify({"success": False, "error": "A nova senha deve ter pelo menos 8 caracteres"}), 400
+
+    session = _get_db_session()
+    try:
+        user = session.query(User).filter_by(id=int(identity)).first()
+        if not user:
+            return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
+
+        user.password = User.get_password_hash(new_password)
+        user.must_change_password = False
+        session.add(user)
+        session.commit()
+
+        # Emite novo token para remover o flag do lado do frontend sem exigir novo login
+        access_token = create_access_token(
+            identity=str(user.id),
+            additional_claims={
+                "username": user.username,
+                "role": getattr(user, 'role', 'peer'),
+                "is_limited": getattr(user, 'is_limited', False),
+                "must_change_password": False,
+            },
+        )
+
+        return jsonify({
+            "success": True,
+            "message": "Senha atualizada com sucesso",
+            "access_token": access_token,
         }), 200
     except Exception as e:
         session.rollback()

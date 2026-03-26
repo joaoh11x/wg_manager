@@ -40,6 +40,7 @@ def login():
                     "username": user.username,
                     "role": getattr(user, 'role', 'peer'),
                     "is_limited": getattr(user, 'is_limited', False),
+                    "must_change_password": getattr(user, 'must_change_password', False),
                 },
             )
             
@@ -57,6 +58,7 @@ def login():
                     "email": user.email if hasattr(user, 'email') else f"{user.username}@example.com",
                     "role": getattr(user, 'role', 'peer'),
                     "is_limited": getattr(user, 'is_limited', False),
+                    "must_change_password": getattr(user, 'must_change_password', False),
                 }
             }), 200
         else:

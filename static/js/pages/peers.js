@@ -387,6 +387,27 @@ async function showQr(peerName) {
   modal.show();
 }
 
+async function copyToClipboard(text) {
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  // Fallback para contextos onde Clipboard API não está disponível (ex.: HTTP)
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  ta.style.top = "-9999px";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  return ok;
+}
+
 async function resetPassword(peerName) {
   const ok = confirm(`Resetar a senha do usuário vinculado ao peer ${peerName}?`);
   if (!ok) return;
@@ -404,8 +425,14 @@ async function resetPassword(peerName) {
 
   const creds = data?.credentials;
   if (creds?.username && creds?.password) {
-    await navigator.clipboard.writeText(`username: ${creds.username}\npassword: ${creds.password}`);
-    toast("Senha resetada (copiada para a área de transferência)", "success");
+    const text = `username: ${creds.username}\npassword: ${creds.password}`;
+    const copied = await copyToClipboard(text);
+    toast(
+      copied
+        ? "Senha resetada (copiada para a área de transferência)"
+        : "Senha resetada (não foi possível copiar automaticamente)",
+      copied ? "success" : "warning"
+    );
   } else {
     toast("Senha resetada", "success");
   }
@@ -488,8 +515,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("btnCopyConfig")?.addEventListener("click", async () => {
     const txt = document.getElementById("txtConfig").value;
-    await navigator.clipboard.writeText(txt);
-    toast("Config copiada", "success");
+    const copied = await copyToClipboard(txt);
+    toast(copied ? "Config copiada" : "Não foi possível copiar", copied ? "success" : "warning");
   });
 
   document.getElementById("btnDownloadConfig")?.addEventListener("click", async () => {
