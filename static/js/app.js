@@ -72,6 +72,108 @@ export function toast(message, variant = "dark") {
   el.addEventListener("hidden.bs.toast", () => el.remove());
 }
 
+function renderForcePasswordChangeModal() {
+  if (document.getElementById("modalForcePasswordChange")) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = `
+    <div class="modal fade" id="modalForcePasswordChange" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Trocar senha</h5>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label" for="newPassword">Nova senha</label>
+              <input class="form-control" type="password" id="newPassword" autocomplete="new-password" />
+            </div>
+            <div class="mb-2">
+              <label class="form-label" for="confirmPassword">Confirmar nova senha</label>
+              <input class="form-control" type="password" id="confirmPassword" autocomplete="new-password" />
+            </div>
+            <div class="text-muted small">Obrigatório na primeira entrada após reset.</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-dark" id="btnChangePassword" type="button">Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrapper.firstElementChild);
+}
+
+async function enforceMustChangePassword() {
+  const token = getToken();
+  if (!token) return;
+  const payload = decodeJwt(token);
+  if (!payload?.must_change_password) return;
+
+  renderForcePasswordChangeModal();
+
+  const elModal = document.getElementById("modalForcePasswordChange");
+  const elNew = document.getElementById("newPassword");
+  const elConfirm = document.getElementById("confirmPassword");
+  const btn = document.getElementById("btnChangePassword");
+
+  const modal = new bootstrap.Modal(elModal, {
+    backdrop: "static",
+    keyboard: false,
+    focus: true,
+  });
+
+  const submit = async () => {
+    const newPassword = elNew?.value || "";
+    const confirmPassword = elConfirm?.value || "";
+    if (!newPassword || !confirmPassword) {
+      toast("Preencha os dois campos", "warning");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast("As senhas não conferem", "warning");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Salvando…";
+    try {
+      const res = await apiFetch("/me/password/change", {
+        method: "POST",
+        json: { new_password: newPassword, confirm_password: confirmPassword },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast(data?.error || "Falha ao trocar senha", "danger");
+        return;
+      }
+      if (data?.access_token) setToken(data.access_token);
+      modal.hide();
+      location.reload();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Salvar";
+    }
+  };
+
+  if (btn && !btn.dataset.bound) {
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", submit);
+  }
+
+  // Enter para submeter
+  [elNew, elConfirm].forEach((el) => {
+    if (!el || el.dataset.bound) return;
+    el.dataset.bound = "1";
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submit();
+    });
+  });
+
+  modal.show();
+  setTimeout(() => elNew?.focus(), 250);
+}
+
 export async function apiFetch(path, options = {}) {
   const token = getToken();
   const headers = new Headers(options.headers || {});
@@ -134,9 +236,29 @@ function initNavUser() {
       location.href = "/login";
     });
   }
+
+  // Para peers: esconder links da navbar (defesa em profundidade)
+  const roleValue = payload?.role || "peer";
+  if (roleValue === "peer") {
+    const navLinks = document.getElementById("navLinks");
+    if (navLinks) navLinks.classList.add("d-none");
+  }
+}
+
+function enforcePeerSingleScreen() {
+  const token = getToken();
+  if (!token) return;
+  const payload = decodeJwt(token);
+  const role = payload?.role || "peer";
+  const path = location.pathname || "/";
+  if (role === "peer" && path.startsWith("/ui/") && path !== "/ui/me") {
+    location.replace("/ui/me");
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  enforcePeerSingleScreen();
   setActiveNav();
   initNavUser();
+  enforceMustChangePassword();
 });

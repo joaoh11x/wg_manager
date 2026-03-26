@@ -1,0 +1,26 @@
+services:
+  wireguard-manager:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_HOST: 0.0.0.0
+      FLASK_PORT: "5000"
+      APP_ENV: ${APP_ENV:-development}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      SECRET_KEY: ${SECRET_KEY:-}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      DB_PATH: /app/database.db
+
+      # Opcional: sincroniza do MikroTik -> SQLite uma vez ao iniciar o container, trocar para 1 para ativar
+      RUN_MIKROTIK_SYNC_ON_START: ${RUN_MIKROTIK_SYNC_ON_START:-0}
+      MIKROTIK_HOST: ${MIKROTIK_HOST:-}
+      MIKROTIK_USER: ${MIKROTIK_USER:-}
+      MIKROTIK_PASS: ${MIKROTIK_PASS:-}
+    volumes:
+      - wg_manager_data:/data
+    restart: unless-stopped
+
+volumes:
+  wg_manager_data:

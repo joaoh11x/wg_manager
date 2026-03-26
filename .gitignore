@@ -44,3 +44,6 @@ Thumbs.db
 
 # Ignora arquivos de banco de dados
 *.db
+
+# Ignora script local de inicialização do DB (não versionar)
+init_db.py

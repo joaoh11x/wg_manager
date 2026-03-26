@@ -329,14 +329,58 @@ def reset_peer_password(peer_name):
         if not peer:
             return jsonify({"success": False, "error": "Peer não encontrado"}), 404
 
-        if not getattr(peer, 'user_id', None):
-            return jsonify({"success": False, "error": "Peer não possui usuário vinculado"}), 404
-
-        user = session.query(User).filter_by(id=peer.user_id).first()
-        if not user:
-            return jsonify({"success": False, "error": "Usuário vinculado não encontrado"}), 404
-
         role = (claims or {}).get('role', 'peer')
+
+        # Se ainda não houver vínculo, por segurança apenas admin pode criar/vincular
+        if not getattr(peer, 'user_id', None):
+            if role != 'admin':
+                return jsonify({
+                    "success": False,
+                    "error": "Peer não possui usuário vinculado. Solicite ao administrador para vincular/criar o usuário."
+                }), 403
+
+            # Tenta reutilizar usuário existente pelo email do peer
+            user = session.query(User).filter_by(email=peer.email).first()
+            if not user:
+                # Cria um novo usuário para este peer
+                base_username = (peer.name or '').strip().lower().replace(' ', '.')
+                candidate = base_username or f"peer{peer.id}"
+                username = candidate
+                suffix = 1
+                while session.query(User).filter_by(username=username).first() is not None:
+                    suffix += 1
+                    username = f"{candidate}{suffix}"
+
+                alphabet = string.ascii_letters + string.digits
+                initial_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+
+                user = User(
+                    username=username,
+                    password=initial_password,
+                    email=peer.email,
+                    display_name=peer.name,
+                    role='peer',
+                    is_limited=True,
+                )
+                session.add(user)
+                session.flush()
+
+            # Vincula (se já existir outro peer vinculado, falha por integridade/semântica)
+            existing_peer_link = session.query(Peer).filter_by(user_id=user.id).first()
+            if existing_peer_link and existing_peer_link.id != peer.id:
+                return jsonify({
+                    "success": False,
+                    "error": "Já existe um usuário com este email vinculado a outro peer"
+                }), 409
+
+            peer.user_id = user.id
+            session.add(peer)
+            session.commit()
+        else:
+            user = session.query(User).filter_by(id=peer.user_id).first()
+            if not user:
+                return jsonify({"success": False, "error": "Usuário vinculado não encontrado"}), 404
+
         is_owner = str(requester_id) == str(user.id)
         if role != 'admin' and not is_owner:
             return jsonify({"success": False, "error": "Acesso negado"}), 403
@@ -347,6 +391,7 @@ def reset_peer_password(peer_name):
 
         # Atualiza a senha com hash
         user.password = User.get_password_hash(new_password)
+        user.must_change_password = True
         session.add(user)
         session.commit()
 

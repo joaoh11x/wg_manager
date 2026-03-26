@@ -1,0 +1,74 @@
+{% extends 'layouts/peer.html' %}
+
+{% block title %}Minha VPN | WG Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-1">Minha VPN</h1>
+    <div class="text-muted">Configuração, QRCode e consumo</div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-dark btn-sm" id="btnRefresh" type="button">Atualizar</button>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+          <h2 class="h6 mb-0">Config</h2>
+          <div class="d-flex align-items-center gap-2">
+            <a class="btn btn-outline-dark btn-sm" id="btnDownload" href="#" role="button">Baixar .conf</a>
+            <button class="btn btn-dark btn-sm" id="btnCopy" type="button">Copiar</button>
+          </div>
+        </div>
+        <textarea class="form-control font-monospace" id="txtConfig" rows="14" readonly placeholder="Carregando…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h2 class="h6 mb-0">QRCode</h2>
+          <div class="text-muted small" id="qrHint">—</div>
+        </div>
+        <div class="text-center">
+          <img id="imgQr" class="img-fluid border rounded" alt="QRCode" style="max-width: 320px;" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h2 class="h6 mb-0">Consumo</h2>
+          <div class="text-muted small" id="trafficHint">—</div>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="text-muted small">RX</div>
+            <div class="h5 mb-0" id="rx">—</div>
+          </div>
+          <div class="col-6">
+            <div class="text-muted small">TX</div>
+            <div class="h5 mb-0" id="tx">—</div>
+          </div>
+          <div class="col-12">
+            <div class="text-muted small">Último handshake</div>
+            <div class="fw-semibold" id="handshake">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/pages/me.js') }}"></script>
+{% endblock %}
