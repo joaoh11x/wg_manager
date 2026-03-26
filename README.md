@@ -1,3 +1,6 @@
+[![GitHub Repo](https://img.shields.io/badge/GitHub-wg__manager-blue?style=flat-square&logo=github)](https://github.com/joaoh11x/wg_manager)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-yellow?style=flat-square&logo=buy-me-a-coffee)](https://buymeacoffee.com/wgmanager)
+
 WG Manager Backend
 
 Flask-based backend (with a small built-in web UI) to manage WireGuard on MikroTik RouterOS.
