@@ -1,4 +1,3 @@
-[![GitHub Downloads](https://img.shields.io/github/downloads/joaoh11x/wg_manager/total?style=flat-square)](https://github.com/joaoh11x/wg_manager/releases)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-yellow?style=flat-square&logo=buy-me-a-coffee)](https://buymeacoffee.com/wgmanager)
 
 WG Manager Backend
