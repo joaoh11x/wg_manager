@@ -180,3 +180,14 @@ pytest
 - **"Missing MikroTik credentials"**: set `MIKROTIK_HOST`, `MIKROTIK_USER`, `MIKROTIK_PASS`.
 - **Docker generated an admin password**: check container logs; it prints the generated `ADMIN_PASSWORD`.
 - **Need a clean DB in Docker**: run `docker compose down -v` to remove the named volume.
+
+💖 Support the project
+
+If WG Manager has helped you simplify your WireGuard setup or saved you time, consider supporting its development.
+
+Your contribution helps keep the project maintained, improve features, and continue building better tools for the community.
+
+You can support here:
+👉 https://buymeacoffee.com/wgmanager
+
+Every contribution, no matter the size, makes a difference. Thank you!
