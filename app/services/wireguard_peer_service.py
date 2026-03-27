@@ -10,6 +10,7 @@ from app.models.interface import Interface
 from app.models.group import Group
 from app.models.peer import Peer
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import selectinload
 from app.models.user import User
 
 
@@ -314,7 +315,14 @@ class WireGuardPeerService:
             peer_names = [p.get('name') for p in raw_peers if p.get('name')]
             db_peers = {}
             if peer_names:
-                db_peers = {p.name: p for p in session.query(Peer).filter(Peer.name.in_(peer_names)).all()}
+                # Eager-load do relacionamento group para evitar N+1 ao acessar db_peer_info.group.name
+                peers_from_db = (
+                    session.query(Peer)
+                    .options(selectinload(Peer.group))
+                    .filter(Peer.name.in_(peer_names))
+                    .all()
+                )
+                db_peers = {p.name: p for p in peers_from_db}
 
             # Formatar os dados de retorno
             formatted_peers = []

@@ -1,6 +1,7 @@
 services:
   wireguard-manager:
     build: .
+    command: ["sh", "-c", "gunicorn --bind ${FLASK_HOST:-0.0.0.0}:${FLASK_PORT:-5000} --workers ${GUNICORN_WORKERS:-2} --threads ${GUNICORN_THREADS:-4} --timeout ${GUNICORN_TIMEOUT:-60} --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} --keep-alive ${GUNICORN_KEEPALIVE:-5} 'app.api:create_app()'"]
     ports:
       - "5000:5000"
     environment:
