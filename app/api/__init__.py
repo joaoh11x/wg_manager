@@ -5,7 +5,7 @@ from flask_cors import CORS
 
 from app.config import Config
 from app.extensions import jwt
-from app.utils.database import apply_sqlite_migrations
+from app.utils.database import ensure_database_schema
 
 
 def create_app():
@@ -45,8 +45,8 @@ def create_app():
     # Inicializa JWT (antes estava no main.py)
     jwt.init_app(app)
 
-    # Migrações simples de SQLite (adiciona colunas se faltarem)
-    apply_sqlite_migrations()
+    # Garante que o schema existe no banco configurado (Postgres)
+    ensure_database_schema()
 
     # Registra blueprints
     from . import (

@@ -9,6 +9,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         build-essential \
+        libpq5 \
         libssl-dev \
         libffi-dev \
     && rm -rf /var/lib/apt/lists/*

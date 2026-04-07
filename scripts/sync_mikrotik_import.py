@@ -1,7 +1,7 @@
-"""Sincroniza interfaces e peers WireGuard do MikroTik para o SQLite.
+"""Sincroniza interfaces e peers WireGuard do MikroTik para o banco (SQLAlchemy).
 
 Use quando você importar/criar uma interface/peers diretamente no MikroTik e o
-frontend enxergar via API, mas o SQLite ainda não tiver os registros.
+frontend enxergar via API, mas o banco ainda não tiver os registros.
 
 Execução:
   python3 sync_mikrotik_import.py
@@ -10,7 +10,7 @@ Requer no .env (ou env vars):
   MIKROTIK_HOST, MIKROTIK_USER, MIKROTIK_PASS
 
 Opcional:
-  DB_PATH=/caminho/para/database.db
+    DATABASE_URL=postgresql+psycopg://user:pass@host:5432/dbname
 """
 
 from __future__ import annotations
@@ -26,8 +26,10 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 
-# Add project root to Python path
-sys.path.append(str(Path(__file__).parent))
+# Allow running this script directly: ensure project root is on sys.path
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.models.interface import Interface
 from app.models.peer import Peer
@@ -88,9 +90,9 @@ def _ensure_unique_email(session, desired_email: str, peer_id: int | None = None
         suffix += 1
 
 
-def sync(db_path: str, dry_run: bool = False) -> dict[str, int]:
+def sync(database_url: str, dry_run: bool = False) -> dict[str, int]:
     mk = MikroTikAPI()
-    db = DatabaseConnection(db_path)
+    db = DatabaseConnection(database_url)
     # Avoid query-triggered autoflush while we're still building upserts.
     Session = sessionmaker(bind=db.engine, autoflush=False)
 
@@ -259,12 +261,21 @@ def sync(db_path: str, dry_run: bool = False) -> dict[str, int]:
 def main() -> None:
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Sync MikroTik WireGuard interfaces/peers into SQLite")
-    parser.add_argument("--db-path", default=os.getenv("DB_PATH", "database.db"), help="Caminho do SQLite")
+    parser = argparse.ArgumentParser(description="Sync MikroTik WireGuard interfaces/peers into database")
+    parser.add_argument(
+        "--db-url",
+        default=os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_DATABASE_URI") or os.getenv("DATABASE_URI"),
+        help="URL do banco. Ex.: postgresql+psycopg://user:pass@host:5432/dbname",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Não grava no banco (rollback no final)")
     args = parser.parse_args()
 
-    result = sync(db_path=args.db_path, dry_run=args.dry_run)
+    if not args.db_url:
+        raise SystemExit(
+            "DATABASE_URL/--db-url não informado. Ex.: postgresql+psycopg://user:pass@localhost:5432/wireguard_manager"
+        )
+
+    result = sync(database_url=args.db_url, dry_run=args.dry_run)
 
     mode = "DRY-RUN" if args.dry_run else "OK"
     print(f"[{mode}] Sync finalizado")

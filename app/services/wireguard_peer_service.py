@@ -83,10 +83,23 @@ class WireGuardPeerService:
 
         raise ValueError("Não há IPs disponíveis na rede")
 
-    def create_peer(self, name, email, interface_name, client_dns="8.8.8.8", group_id=None):
+    def _normalize_cpf(self, cpf):
+        if cpf is None:
+            return None
+        cpf_str = str(cpf).strip()
+        if not cpf_str:
+            return None
+        digits = ''.join(ch for ch in cpf_str if ch.isdigit())
+        if len(digits) != 11:
+            raise ValueError("CPF deve conter 11 dígitos")
+        return digits
+
+    def create_peer(self, name, email, interface_name, client_dns="8.8.8.8", group_id=None, cpf=None):
         """Cria um novo peer WireGuard"""
         session = self.session()
         try:
+            normalized_cpf = self._normalize_cpf(cpf)
+
             # 1. Verificar se a interface existe no banco de dados
             interface = session.query(Interface).filter_by(name=interface_name).first()
             if not interface:
@@ -128,7 +141,8 @@ class WireGuardPeerService:
                     public_key=keys['public'],
                     ip_address=peer_ip.split('/')[0],
                     interface_id=interface.id,
-                    group_id=group_id
+                    group_id=group_id,
+                    cpf=normalized_cpf,
                 )
 
                 created_user_credentials = None
@@ -218,6 +232,7 @@ class WireGuardPeerService:
                 'public_key': keys['public'],
                 'endpoint': f"{mikrotik_ip}:{listen_port}",
                 'group_id': group_id,
+                'cpf': normalized_cpf,
                 'user': created_user_credentials
             }
 
@@ -240,7 +255,7 @@ class WireGuardPeerService:
 
         peers_resource.set(id=found[0]['id'], private_key=private_key)
 
-    def _save_peer_to_db(self, session, name, email, public_key, ip_address, interface_id, group_id):
+    def _save_peer_to_db(self, session, name, email, public_key, ip_address, interface_id, group_id, cpf=None):
         
         try:
             # 1) Tentar encontrar por nome
@@ -271,23 +286,34 @@ class WireGuardPeerService:
 
             # 3) Se existente, atualizar campos
             if existing_peer:
+                if cpf:
+                    conflict = session.query(Peer).filter(Peer.cpf == cpf, Peer.id != existing_peer.id).first()
+                    if conflict:
+                        raise ValueError("CPF já está em uso por outro peer")
                 existing_peer.name = name
                 existing_peer.email = email
                 existing_peer.public_key = public_key or existing_peer.public_key
                 existing_peer.ip_address = ip_address or existing_peer.ip_address
                 existing_peer.interface_id = interface_id
                 existing_peer.group_id = group_id
+                if cpf:
+                    existing_peer.cpf = cpf
                 session.add(existing_peer)
                 peer_obj = existing_peer
             else:
                 # 4) Criar novo registro
+                if cpf:
+                    conflict = session.query(Peer).filter_by(cpf=cpf).first()
+                    if conflict:
+                        raise ValueError("CPF já está em uso por outro peer")
                 new_peer = Peer(
                     name=name,
                     email=email,
                     public_key=public_key or '',
                     ip_address=ip_address or '',
                     interface_id=interface_id,
-                    group_id=group_id
+                    group_id=group_id,
+                    cpf=cpf,
                 )
                 session.add(new_peer)
                 peer_obj = new_peer
@@ -335,6 +361,7 @@ class WireGuardPeerService:
                     'interface': peer.get('interface', ''),
                     'public_key': peer.get('public-key', ''),
                     'email': db_peer_info.email if db_peer_info else None,
+                    'cpf': getattr(db_peer_info, 'cpf', None) if db_peer_info else None,
                     'group': {
                         'id': db_peer_info.group_id,
                         'name': db_peer_info.group.name if db_peer_info and db_peer_info.group else None

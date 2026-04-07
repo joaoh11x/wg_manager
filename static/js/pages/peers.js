@@ -8,6 +8,7 @@ import {
 
 let groupsCache = [];
 let currentPeerForConfig = "";
+let currentPeerForEdit = "";
 let allPeersCache = [];
 const PAGE_SIZE = 10;
 let currentPage = 1;
@@ -232,6 +233,7 @@ function renderPeers(peers) {
           <td class="text-muted small">${escapeHtml(p.last_handshake || "—")}</td>
           <td class="text-end" style="white-space: nowrap;">
             ${toggleBtn}
+            <button class="btn btn-outline-secondary btn-sm" data-action="edit" data-peer="${escapeHtml(p.name)}">Editar</button>
             <button class="btn btn-outline-secondary btn-sm" data-action="config" data-peer="${escapeHtml(p.name)}">Config</button>
             <button class="btn btn-outline-secondary btn-sm" data-action="qr" data-peer="${escapeHtml(p.name)}">QR</button>
             <button class="btn btn-outline-secondary btn-sm" data-action="reset" data-peer="${escapeHtml(p.name)}">Reset senha</button>
@@ -292,6 +294,9 @@ async function createPeer(form) {
     interface: form.interface.value,
   };
 
+  const cpf = (form.cpf?.value || "").trim();
+  if (cpf) payload.cpf = cpf;
+
   const dns = (form.client_dns.value || "").trim();
   if (dns) payload.client_dns = dns;
 
@@ -312,6 +317,70 @@ async function createPeer(form) {
   toast("Peer criado", "success");
   form.reset();
   await loadPeers();
+}
+
+function findPeer(peerName) {
+  return allPeersCache.find((p) => p?.name === peerName) || null;
+}
+
+async function showEdit(peerName) {
+  const peer = findPeer(peerName);
+  if (!peer) {
+    toast("Peer não encontrado na lista", "warning");
+    return;
+  }
+
+  currentPeerForEdit = peerName;
+  const form = document.getElementById("formEditPeer");
+  if (!form) return;
+
+  form.peer_name.value = peerName;
+  form.email.value = peer?.email || "";
+  form.cpf.value = peer?.cpf || "";
+
+  document.getElementById("modalEditPeerTitle").textContent = `Editar: ${peerName}`;
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("modalEditPeer"));
+  modal.show();
+}
+
+async function updatePeer(peerName, form) {
+  const payload = {
+    email: form.email.value.trim(),
+  };
+
+  const cpf = (form.cpf.value || "").trim();
+  if (cpf) payload.cpf = cpf;
+  else payload.cpf = "";
+
+  const res = await apiFetch(`/wireguard/peers/${encodeURIComponent(peerName)}`, {
+    method: "PUT",
+    json: payload,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    toast(data?.error || "Falha ao atualizar peer", "danger");
+    return false;
+  }
+
+  const updated = data?.peer;
+  if (updated?.name) {
+    allPeersCache = allPeersCache.map((p) =>
+      p?.name === updated.name
+        ? {
+            ...p,
+            email: updated.email,
+            cpf: updated.cpf,
+          }
+        : p
+    );
+  } else {
+    await loadPeers();
+  }
+
+  applyFilters();
+  toast("Peer atualizado", "success");
+  return true;
 }
 
 async function deletePeer(peerName) {
@@ -481,11 +550,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!action || !peer) return;
 
     if (action === "delete") await deletePeer(peer);
+    if (action === "edit") await showEdit(peer);
     if (action === "config") await showConfig(peer);
     if (action === "qr") await showQr(peer);
     if (action === "reset") await resetPassword(peer);
     if (action === "enable") await setPeerEnabled(peer, true);
     if (action === "disable") await setPeerEnabled(peer, false);
+  });
+
+  const editForm = document.getElementById("formEditPeer");
+  editForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!currentPeerForEdit) return;
+    const ok = await updatePeer(currentPeerForEdit, editForm);
+    if (ok) {
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("modalEditPeer"));
+      modal.hide();
+    }
   });
 
   document.getElementById("tblPeers")?.addEventListener("change", async (e) => {
