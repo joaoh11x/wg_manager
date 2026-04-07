@@ -26,6 +26,10 @@
           <input class="form-control" name="email" type="email" placeholder="joao@empresa.com" required />
         </div>
         <div class="col-12 col-md-4">
+          <label class="form-label">CPF (opcional)</label>
+          <input class="form-control" name="cpf" placeholder="000.000.000-00" />
+        </div>
+        <div class="col-12 col-md-4">
           <label class="form-label">Interface</label>
           <select class="form-select" name="interface" id="selPeerInterface" required></select>
         </div>
@@ -114,6 +118,39 @@
       </div>
       <div class="modal-body text-center">
         <img id="imgQr" alt="QR" class="img-fluid rounded border" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit Peer -->
+<div class="modal fade" id="modalEditPeer" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalEditPeerTitle">Editar peer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditPeer" class="row g-2">
+          <div class="col-12">
+            <label class="form-label">Peer</label>
+            <input class="form-control" name="peer_name" readonly />
+          </div>
+          <div class="col-12">
+            <label class="form-label">Email</label>
+            <input class="form-control" name="email" type="email" required />
+          </div>
+          <div class="col-12">
+            <label class="form-label">CPF</label>
+            <input class="form-control" name="cpf" placeholder="000.000.000-00" />
+            <div class="form-text">Deixe vazio para manter sem CPF.</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-dark" type="submit" form="formEditPeer" id="btnSavePeer">Salvar</button>
       </div>
     </div>
   </div>

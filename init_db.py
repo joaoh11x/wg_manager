@@ -2,7 +2,6 @@ import os
 import sys
 import secrets
 from getpass import getpass
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
 
@@ -16,16 +15,15 @@ from app.models.group import Group
 from app.models.interface import Interface
 from app.utils.database import DatabaseConnection
 
-# Database path
-DB_PATH = "database.db"
-
 def init_db():
-    # Remove existing database if it exists
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
-    
-    # Create database and tables
-    db = DatabaseConnection(DB_PATH)
+    db_url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_DATABASE_URI") or os.getenv("DATABASE_URI")
+    if not db_url:
+        raise RuntimeError(
+            "DATABASE_URL não configurada. Ex.: postgresql+psycopg://user:pass@localhost:5432/wireguard_manager"
+        )
+
+    # Create database tables (idempotent)
+    db = DatabaseConnection(db_url)
     Base.metadata.create_all(bind=db.engine)
     
     # Create a session
@@ -49,17 +47,28 @@ def init_db():
                     raise ValueError("Passwords do not match")
                 admin_password = pw1
 
-        admin = User(
-            username="admin",
-            password=admin_password,
-            avatar=None,
-            role='admin',
-            is_limited=False,
-        )
-        session.add(admin)
-        session.commit()
-        print("✅ Database initialized successfully!")
-        print(f"👤 Admin user created with username: admin")
+        admin = session.query(User).filter_by(username="admin").first()
+        if admin is None:
+            admin = User(
+                username="admin",
+                password=admin_password,
+                avatar=None,
+                role='admin',
+                is_limited=False,
+                must_change_password=False,
+            )
+            session.add(admin)
+            session.commit()
+            print("✅ Database initialized successfully!")
+            print("👤 Admin user created with username: admin")
+        else:
+            # Only update password if you explicitly provided/typed one.
+            admin.password = User.get_password_hash(admin_password)
+            admin.role = "admin"
+            admin.is_limited = False
+            admin.must_change_password = False
+            session.commit()
+            print("✅ Database schema ensured; admin user updated")
         if env_password:
             print("🔑 Admin password set via ADMIN_PASSWORD env var")
         

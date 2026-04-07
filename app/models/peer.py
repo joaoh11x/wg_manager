@@ -10,6 +10,7 @@ class Peer(Base):
     email = Column(String, nullable=False, unique=True)
     public_key = Column(String, nullable=False, unique=True)
     ip_address = Column(String, nullable=False, unique=True)
+    cpf = Column(String, nullable=True, unique=True)
     interface_id = Column(Integer, ForeignKey("interfaces.id"), nullable=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, unique=True)
@@ -25,6 +26,7 @@ class Peer(Base):
             'email': self.email,
             'public_key': self.public_key,
             'ip_address': self.ip_address,
+            'cpf': self.cpf,
             'interface_id': self.interface_id,
             'interface_name': self.interface.name if self.interface else None,
             'group_id': self.group_id,

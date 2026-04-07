@@ -30,6 +30,7 @@ def create_peer():
     
     # DNS opcional; aceita tanto 'client_dns' quanto 'dns' como alias, padrão 8.8.8.8
     client_dns = data.get('client_dns', data.get('dns', '8.8.8.8'))
+    cpf = data.get('cpf')
     group_id = data.get('group_id')  # Grupo opcional
     
     # Validar group_id se fornecido
@@ -46,7 +47,8 @@ def create_peer():
         email=data['email'], 
         interface_name=data['interface'],
         client_dns=client_dns,
-        group_id=group_id
+        group_id=group_id,
+        cpf=cpf,
     )
     
     if result['success']:
@@ -74,6 +76,88 @@ def delete_peer(peer_name):
         return jsonify({"message": f"Peer {peer_name} removido"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+@peers_bp.route('/wireguard/peers/<peer_name>', methods=['PUT'])
+@admin_required
+def update_peer(peer_name):
+    """Atualiza dados do peer salvos no banco (ex.: email e cpf).
+
+    Não altera o peer no MikroTik (nome/chaves/etc). Apenas metadados locais.
+    """
+    payload = request.get_json(silent=True) or {}
+    email = payload.get('email')
+    cpf = payload.get('cpf')
+
+    if email is None and cpf is None:
+        return jsonify({"success": False, "error": "Nada para atualizar"}), 400
+
+    service = WireGuardPeerService()
+
+    Session = sessionmaker(bind=DatabaseConnection().engine)
+    session = Session()
+    try:
+        peer = session.query(Peer).filter_by(name=peer_name).first()
+        if not peer:
+            return jsonify({"success": False, "error": "Peer não encontrado"}), 404
+
+        if email is not None:
+            email = str(email).strip()
+            if not email:
+                return jsonify({"success": False, "error": "Email não pode ser vazio"}), 400
+            # Unicidade (Peer.email é unique)
+            conflict = session.query(Peer).filter(Peer.email == email, Peer.id != peer.id).first()
+            if conflict:
+                return jsonify({"success": False, "error": "Email já está em uso por outro peer"}), 409
+            peer.email = email
+
+        if cpf is not None:
+            normalized = service._normalize_cpf(cpf)
+            conflict = session.query(Peer).filter(Peer.cpf == normalized, Peer.id != peer.id).first()
+            if conflict:
+                return jsonify({"success": False, "error": "CPF já está em uso por outro peer"}), 409
+            peer.cpf = normalized
+
+        session.add(peer)
+        session.commit()
+
+        return jsonify({
+            "success": True,
+            "peer": peer.to_dict(),
+        }), 200
+    except ValueError as e:
+        session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        session.close()
+
+
+@peers_bp.route('/wireguard/peers/by-cpf/<cpf>', methods=['DELETE'])
+@admin_required
+def delete_peer_by_cpf(cpf):
+    """Exclui um peer a partir do CPF salvo no banco.
+
+    Útil para integrações externas que não guardam o peer_name.
+    """
+    service = WireGuardPeerService()
+    session = DatabaseConnection().engine
+    Session = sessionmaker(bind=session)
+    db_session = Session()
+    try:
+        normalized = service._normalize_cpf(cpf)
+        peer = db_session.query(Peer).filter_by(cpf=normalized).first()
+        if not peer:
+            return jsonify({"error": "Peer não encontrado para este CPF"}), 404
+
+        service.delete_peer(peer.name)
+        return jsonify({"message": f"Peer {peer.name} removido"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        db_session.close()
 
 @peers_bp.route('/wireguard/peers/<peer_name>/group', methods=['PUT'])
 @admin_required

@@ -8,11 +8,17 @@ load_dotenv()
 
 
 class Config:
+    # Banco de dados (Postgres)
+    DATABASE_URL = (
+        os.getenv("DATABASE_URL")
+        or os.getenv("SQLALCHEMY_DATABASE_URI")
+        or os.getenv("DATABASE_URI")
+    )
+
     # Integrações
     MIKROTIK_HOST = os.getenv("MIKROTIK_HOST")
     MIKROTIK_USER = os.getenv("MIKROTIK_USER")
     MIKROTIK_PASS = os.getenv("MIKROTIK_PASS")
-    MIKROTIK_DATABASE = os.getenv("DATABASE_URI")
 
     # Flask/JWT
     _env = (os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or "").lower()
