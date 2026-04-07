@@ -2,7 +2,7 @@ G Manager Backend
 
 Flask-based backend (with a small built-in web UI) to manage WireGuard on MikroTik RouterOS.
 It exposes HTTP endpoints for authentication and admin operations (interfaces, peers, rules, etc.)
-and persists application state in a local SQLite database.
+and persists application state in a SQLAlchemy-backed database (Postgres by default).
 
 ## What this project does
 
@@ -12,15 +12,15 @@ and persists application state in a local SQLite database.
 	- Managing WireGuard interfaces and peers on MikroTik.
 	- IP addresses, firewall rules, NAT rules, ACL, groups.
 	- Basic system resource monitoring (including an SSE stream).
-- **Persistence** using **SQLite + SQLAlchemy**.
-- **Optional import/sync** of data from MikroTik into SQLite on container startup.
+- **Persistence** using **Postgres + SQLAlchemy**.
+- **Optional import/sync** of data from MikroTik into the database on container startup.
 
 ## Tech stack
 
 - Python 3.11
 - Flask + flask-cors
 - Flask-JWT-Extended
-- SQLAlchemy + SQLite
+- SQLAlchemy + Postgres (psycopg)
 - RouterOS API client (`RouterOS-api`)
 
 ## Quick start (Docker Compose)
@@ -39,6 +39,10 @@ Example:
 ```env
 APP_ENV=development
 FRONTEND_ORIGIN=http://localhost:3000
+
+# Database (optional in Docker Compose: defaults are provided)
+# DATABASE_URL=postgresql+psycopg://wireguard:wireguard@localhost:5432/wireguard_manager
+# DB_SCHEMA=wireguard_manager
 
 # If you set this, the container will use it.
 ADMIN_PASSWORD=change-me
@@ -72,8 +76,8 @@ The app will be available at:
 
 ### Database persistence (Docker)
 
-The container stores the SQLite file in a named volume (`wg_manager_data`) and symlinks it to
-`/app/database.db` so the application always sees `./database.db`.
+Docker Compose starts a Postgres service and persists data in the named volume `pgdata`.
+By default, the app uses `DATABASE_URL` pointing at the `postgres` service.
 
 To reset the database:
 
@@ -98,8 +102,13 @@ pip install -r requirements.txt
 ### 2) Configure environment variables
 
 You can export variables in your shell or create a `.env` file in the project root.
+The app loads `.env` automatically via `python-dotenv`.
 
-At minimum, to use MikroTik-backed features you must set:
+To run locally you need an accessible Postgres instance and:
+
+- `DATABASE_URL` (e.g. `postgresql+psycopg://wireguard:wireguard@localhost:5432/wireguard_manager`)
+
+To use MikroTik-backed features you also need:
 
 - `MIKROTIK_HOST`
 - `MIKROTIK_USER`
@@ -107,7 +116,7 @@ At minimum, to use MikroTik-backed features you must set:
 
 ### 3) Initialize the database
 
-This creates `database.db` and an `admin` user.
+This ensures tables exist (idempotent) and creates/updates the `admin` user.
 
 ```bash
 python init_db.py
@@ -125,6 +134,17 @@ python app/main.py
 Open:
 
 - http://127.0.0.1:5000/ui/dashboard
+
+### Tip: run only Postgres via Docker
+
+If you want to run Flask locally while using Postgres via Docker:
+
+```bash
+docker compose up -d postgres
+export DATABASE_URL='postgresql+psycopg://wireguard:wireguard@localhost:5432/wireguard_manager'
+python init_db.py
+python app/main.py
+```
 
 ## Environment variables
 
@@ -153,8 +173,12 @@ MikroTik integration:
 
 Database:
 
-- Local runs use `database.db` in the current working directory.
-- `DB_PATH` is used by the non-interactive init scripts (e.g. Docker init).
+- `DATABASE_URL`: database URL (Postgres). Also accepts `SQLALCHEMY_DATABASE_URI` / `DATABASE_URI`.
+- `DB_SCHEMA` (optional): Postgres schema name to set in `search_path`.
+
+Gunicorn (Docker):
+
+- `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`, `GUNICORN_GRACEFUL_TIMEOUT`, `GUNICORN_KEEPALIVE`.
 
 ## API notes
 
@@ -169,6 +193,43 @@ curl -s -X POST http://localhost:5000/login \
 	-d '{"username":"admin","password":"YOUR_PASSWORD"}'
 ```
 
+### SSE (resource monitoring)
+
+The `GET /system/resources/stream` endpoint is protected (JWT) and responds using Server-Sent Events.
+Example (replace the token):
+
+```bash
+curl -N http://localhost:5000/system/resources/stream \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+## Useful scripts
+
+- Reset admin password (Postgres):
+
+```bash
+export DATABASE_URL='postgresql+psycopg://wireguard:wireguard@localhost:5432/wireguard_manager'
+export NEW_ADMIN_PASSWORD='new-password'
+python scripts/reset_admin_password.py
+```
+
+- Sync/import from MikroTik -> database (same logic used by the container when `RUN_MIKROTIK_SYNC_ON_START=1`):
+
+```bash
+export DATABASE_URL='postgresql+psycopg://wireguard:wireguard@localhost:5432/wireguard_manager'
+export MIKROTIK_HOST='...'
+export MIKROTIK_USER='...'
+export MIKROTIK_PASS='...'
+python scripts/sync_mikrotik_import.py --db-url "$DATABASE_URL"
+```
+
+- Migrate legacy SQLite -> Postgres:
+
+```bash
+export DATABASE_URL='postgresql+psycopg://wireguard:wireguard@localhost:5432/wireguard_manager'
+python scripts/migrate_sqlite_to_postgres.py --sqlite-path database.db --postgres-url "$DATABASE_URL"
+```
+
 ## Running tests
 
 ```bash
@@ -180,3 +241,4 @@ pytest
 - **"Missing MikroTik credentials"**: set `MIKROTIK_HOST`, `MIKROTIK_USER`, `MIKROTIK_PASS`.
 - **Docker generated an admin password**: check container logs; it prints the generated `ADMIN_PASSWORD`.
 - **Need a clean DB in Docker**: run `docker compose down -v` to remove the named volume.
+- **"DATABASE_URL not configured"**: set `DATABASE_URL` (local) or use `docker compose up` (Docker injects a default value).
